@@ -1,0 +1,401 @@
+### SmartMoodle API — Phase 2
+###
+### Works with the VS Code "REST Client" extension (humao.rest-client) and
+### the JetBrains HTTP client. Run the seed first:
+###     docker compose exec backend npm run seed
+###
+### Then run the three "login as ..." requests below. The REST Client
+### extension stores the JWT in @adminToken / @teacherToken / @studentToken
+### automatically via the `# @name` capture, so the rest of the file works
+### without manual copy/paste.
+
+@host = http://localhost:5000
+@contentType = application/json
+
+### ===========================================================================
+### 0. Health check
+### ===========================================================================
+
+### Public
+GET {{host}}/health
+
+
+### ===========================================================================
+### 1. Auth
+### ===========================================================================
+
+### Register a new student (200/201). Re-running once gives EMAIL_TAKEN (409).
+POST {{host}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "newstudent@smartmoodle.local",
+  "password": "Student123!",
+  "firstName": "Nouvelle",
+  "lastName": "Étudiante",
+  "role": "student"
+}
+
+
+### Register — invalid (short password) → 400 VALIDATION_ERROR
+POST {{host}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "bad@smartmoodle.local",
+  "password": "short",
+  "firstName": "X",
+  "lastName": "Y",
+  "role": "student"
+}
+
+
+### Register — role=admin should fail (only seed creates admins) → 400
+POST {{host}}/api/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "rogue@smartmoodle.local",
+  "password": "Secret123!",
+  "firstName": "Rogue",
+  "lastName": "User",
+  "role": "admin"
+}
+
+
+### Login as admin → captures @adminToken
+# @name loginAdmin
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "admin@smartmoodle.local",
+  "password": "Admin123!"
+}
+
+@adminToken = {{loginAdmin.response.body.token}}
+
+
+### Login as teacher 1 → captures @teacherToken
+# @name loginTeacher
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "teacher1@smartmoodle.local",
+  "password": "Teacher123!"
+}
+
+@teacherToken = {{loginTeacher.response.body.token}}
+
+
+### Login as a different teacher (used to test cross-teacher 403)
+# @name loginTeacher2
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "teacher2@smartmoodle.local",
+  "password": "Teacher123!"
+}
+
+@teacher2Token = {{loginTeacher2.response.body.token}}
+
+
+### Login as student 1 → captures @studentToken
+# @name loginStudent
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "student1@smartmoodle.local",
+  "password": "Student123!"
+}
+
+@studentToken = {{loginStudent.response.body.token}}
+
+
+### Login — wrong password → 401 INVALID_CREDENTIALS
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "student1@smartmoodle.local",
+  "password": "wrong-password"
+}
+
+
+### GET /me — no token → 401
+GET {{host}}/api/auth/me
+
+
+### GET /me — malformed token → 401
+GET {{host}}/api/auth/me
+Authorization: Bearer not-a-real-jwt
+
+
+### GET /me — valid → 200
+GET {{host}}/api/auth/me
+Authorization: Bearer {{studentToken}}
+
+
+### ===========================================================================
+### 2. Courses
+### ===========================================================================
+
+### List — no token → 401
+GET {{host}}/api/courses
+
+
+### List — valid (any role) → 200
+GET {{host}}/api/courses
+Authorization: Bearer {{studentToken}}
+
+
+### Detail — valid → 200 (course with materials array)
+GET {{host}}/api/courses/1
+Authorization: Bearer {{studentToken}}
+
+
+### Detail — unknown id → 404 COURSE_NOT_FOUND
+GET {{host}}/api/courses/99999
+Authorization: Bearer {{studentToken}}
+
+
+### Create — no token → 401
+POST {{host}}/api/courses
+Content-Type: {{contentType}}
+
+{
+  "title": "Test"
+}
+
+
+### Create — student (wrong role) → 403 FORBIDDEN
+POST {{host}}/api/courses
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Cours interdit"
+}
+
+
+### Create — teacher → 201
+# @name createCourse
+POST {{host}}/api/courses
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Cours d'essai - API HTTP",
+  "description": "Créé via le client HTTP."
+}
+
+@newCourseId = {{createCourse.response.body.course.id}}
+
+
+### Update — owner teacher → 200
+PUT {{host}}/api/courses/{{newCourseId}}
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{
+  "description": "Description mise à jour."
+}
+
+
+### Update — different teacher (not owner, not admin) → 403
+PUT {{host}}/api/courses/{{newCourseId}}
+Authorization: Bearer {{teacher2Token}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Tentative interdite"
+}
+
+
+### Update — admin can update any course → 200
+PUT {{host}}/api/courses/{{newCourseId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: {{contentType}}
+
+{
+  "title": "Renommé par admin"
+}
+
+
+### List students of a course — no token → 401
+GET {{host}}/api/courses/1/students
+
+
+### List students — student role → 403
+GET {{host}}/api/courses/1/students
+Authorization: Bearer {{studentToken}}
+
+
+### List students — teacher who is NOT the owner → 403
+GET {{host}}/api/courses/1/students
+Authorization: Bearer {{teacher2Token}}
+
+
+### List students — owner teacher → 200
+GET {{host}}/api/courses/1/students
+Authorization: Bearer {{teacherToken}}
+
+
+### List students — admin → 200
+GET {{host}}/api/courses/1/students
+Authorization: Bearer {{adminToken}}
+
+
+### Delete — different teacher → 403
+DELETE {{host}}/api/courses/{{newCourseId}}
+Authorization: Bearer {{teacher2Token}}
+
+
+### Delete — owner teacher → 204
+DELETE {{host}}/api/courses/{{newCourseId}}
+Authorization: Bearer {{teacherToken}}
+
+
+### ===========================================================================
+### 3. Enrollments
+### ===========================================================================
+
+### Enroll — no token → 401
+POST {{host}}/api/enrollments
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Enroll — teacher (wrong role) → 403
+POST {{host}}/api/enrollments
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Enroll — student into a new course → 201
+POST {{host}}/api/enrollments
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 2 }
+
+
+### Enroll — same student again into same course → 409 ALREADY_ENROLLED
+POST {{host}}/api/enrollments
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 2 }
+
+
+### Enroll — non-existent course → 404 COURSE_NOT_FOUND
+POST {{host}}/api/enrollments
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 99999 }
+
+
+### My enrollments — no token → 401
+GET {{host}}/api/enrollments/me
+
+
+### My enrollments — teacher (wrong role) → 403
+GET {{host}}/api/enrollments/me
+Authorization: Bearer {{teacherToken}}
+
+
+### My enrollments — student → 200
+GET {{host}}/api/enrollments/me
+Authorization: Bearer {{studentToken}}
+
+
+### ===========================================================================
+### 4. Admin
+### ===========================================================================
+
+### List users — no token → 401
+GET {{host}}/api/admin/users
+
+
+### List users — student → 403
+GET {{host}}/api/admin/users
+Authorization: Bearer {{studentToken}}
+
+
+### List users — teacher → 403
+GET {{host}}/api/admin/users
+Authorization: Bearer {{teacherToken}}
+
+
+### List users — admin → 200
+GET {{host}}/api/admin/users
+Authorization: Bearer {{adminToken}}
+
+
+### Change role — student attempting → 403
+PATCH {{host}}/api/admin/users/4/role
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "role": "teacher" }
+
+
+### Change role — admin promotes a student to teacher → 200
+PATCH {{host}}/api/admin/users/4/role
+Authorization: Bearer {{adminToken}}
+Content-Type: {{contentType}}
+
+{ "role": "teacher" }
+
+
+### Change role — admin demotes back to student → 200
+PATCH {{host}}/api/admin/users/4/role
+Authorization: Bearer {{adminToken}}
+Content-Type: {{contentType}}
+
+{ "role": "student" }
+
+
+### Change role — invalid role → 400
+PATCH {{host}}/api/admin/users/4/role
+Authorization: Bearer {{adminToken}}
+Content-Type: {{contentType}}
+
+{ "role": "wizard" }
+
+
+### Delete user — student attempting → 403
+DELETE {{host}}/api/admin/users/5
+Authorization: Bearer {{studentToken}}
+
+
+### Delete user — admin trying to delete self → 400 CANNOT_DELETE_SELF
+### (replace the id below with the admin id from /api/admin/users)
+DELETE {{host}}/api/admin/users/1
+Authorization: Bearer {{adminToken}}
+
+
+### Delete user — admin deletes the previously-registered "newstudent" → 204
+### (find the id via GET /api/admin/users and update the URL accordingly)
+# DELETE {{host}}/api/admin/users/8
+# Authorization: Bearer {{adminToken}}
+
+
+### ===========================================================================
+### 5. Rate limiter sanity check
+### ===========================================================================
+### Fire this >10 times in 15 minutes from the same IP to see 429 RATE_LIMITED
+POST {{host}}/api/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "nobody@smartmoodle.local",
+  "password": "wrong"
+}

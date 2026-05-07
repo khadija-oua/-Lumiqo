@@ -2,8 +2,10 @@ const { Router } = require('express');
 const { body, param } = require('express-validator');
 
 const coursesController = require('../controllers/courses.controller');
+const materialsController = require('../controllers/materials.controller');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
+const { uploadPdf } = require('../middleware/upload');
 
 const router = Router();
 
@@ -73,6 +75,33 @@ router.delete(
   [param('id').isInt({ min: 1 }).withMessage('ID de cours invalide.')],
   validate,
   coursesController.remove,
+);
+
+// --- Course materials (PDF upload + listing) ----------------------------
+
+router.get(
+  '/:courseId/materials',
+  [param('courseId').isInt({ min: 1 }).withMessage('ID de cours invalide.')],
+  validate,
+  materialsController.listForCourse,
+);
+
+// Multer must run BEFORE express-validator so multipart fields populate req.body.
+router.post(
+  '/:courseId/materials',
+  requireRole('teacher'),
+  [param('courseId').isInt({ min: 1 }).withMessage('ID de cours invalide.')],
+  validate,
+  uploadPdf('file'),
+  [
+    body('title')
+      .isString()
+      .trim()
+      .isLength({ min: 1, max: 255 })
+      .withMessage('Le titre est requis (255 caractères max).'),
+  ],
+  validate,
+  materialsController.upload,
 );
 
 module.exports = router;

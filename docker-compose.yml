@@ -49,6 +49,9 @@ services:
     volumes:
       - ./backend:/app
       - backend_node_modules:/app/node_modules
+      # GCP service-account JSON. The directory is bind-mounted read-only
+      # so application code can never overwrite the key file.
+      - ./backend/credentials:/app/credentials:ro
     command: npm run dev
     networks:
       - smartmoodle

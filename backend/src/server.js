@@ -21,7 +21,9 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+// 1 MB cap for JSON bodies. Multipart uploads are parsed by multer and
+// bypass this limit (capped to 25 MB in middleware/upload.js).
+app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
 
 app.get('/health', (_req, res) => {

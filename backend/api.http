@@ -72,7 +72,7 @@ Content-Type: {{contentType}}
   "email": "admin@smartmoodle.local",
   "password": "Admin123!"
 }
-
+###
 @adminToken = {{loginAdmin.response.body.token}}
 
 
@@ -85,7 +85,7 @@ Content-Type: {{contentType}}
   "email": "teacher1@smartmoodle.local",
   "password": "Teacher123!"
 }
-
+###
 @teacherToken = {{loginTeacher.response.body.token}}
 
 
@@ -98,7 +98,7 @@ Content-Type: {{contentType}}
   "email": "teacher2@smartmoodle.local",
   "password": "Teacher123!"
 }
-
+###
 @teacher2Token = {{loginTeacher2.response.body.token}}
 
 
@@ -111,7 +111,7 @@ Content-Type: {{contentType}}
   "email": "student1@smartmoodle.local",
   "password": "Student123!"
 }
-
+###
 @studentToken = {{loginStudent.response.body.token}}
 
 
@@ -191,7 +191,7 @@ Content-Type: {{contentType}}
   "title": "Cours d'essai - API HTTP",
   "description": "Créé via le client HTTP."
 }
-
+###
 @newCourseId = {{createCourse.response.body.course.id}}
 
 
@@ -389,7 +389,160 @@ Authorization: Bearer {{adminToken}}
 
 
 ### ===========================================================================
-### 5. Rate limiter sanity check
+### 5. Course materials (Phase 3 — PDF upload via Google Drive)
+### ===========================================================================
+### Drop a PDF at backend/test-files/sample.pdf before running these.
+### REST Client: the `< ./path` syntax inlines a file's contents.
+
+### Upload — no token → 401
+POST {{host}}/api/courses/1/materials
+Content-Type: multipart/form-data; boundary=----Form
+
+------Form
+Content-Disposition: form-data; name="title"
+
+Should fail
+------Form
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./test-files/sample.pdf
+------Form--
+
+
+### Upload — student (wrong role) → 403
+POST {{host}}/api/courses/1/materials
+Authorization: Bearer {{studentToken}}
+Content-Type: multipart/form-data; boundary=----Form
+
+------Form
+Content-Disposition: form-data; name="title"
+
+Should fail
+------Form
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./test-files/sample.pdf
+------Form--
+
+
+### Upload — wrong teacher (not the owner) → 403
+POST {{host}}/api/courses/1/materials
+Authorization: Bearer {{teacher2Token}}
+Content-Type: multipart/form-data; boundary=----Form
+
+------Form
+Content-Disposition: form-data; name="title"
+
+Should fail
+------Form
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./test-files/sample.pdf
+------Form--
+
+
+### Upload — non-PDF mime → 400 INVALID_FILE_TYPE
+POST {{host}}/api/courses/1/materials
+Authorization: Bearer {{teacherToken}}
+Content-Type: multipart/form-data; boundary=----Form
+
+------Form
+Content-Disposition: form-data; name="title"
+
+Bad type
+------Form
+Content-Disposition: form-data; name="file"; filename="image.png"
+Content-Type: image/png
+
+< ./test-files/sample.pdf
+------Form--
+
+
+### Upload — owner teacher with valid PDF → 201
+# @name uploadMaterial
+POST {{host}}/api/courses/1/materials
+Authorization: Bearer {{teacherToken}}
+Content-Type: multipart/form-data; boundary=----Form
+
+------Form
+Content-Disposition: form-data; name="title"
+
+Cours d'introduction (PDF)
+------Form
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./test-files/sample.pdf
+------Form--
+
+@materialId = {{uploadMaterial.response.body.material.id}}
+
+
+### List materials of a course — no token → 401
+GET {{host}}/api/courses/1/materials
+
+
+### List materials — student NOT enrolled in this course → 403
+### (use a token for a student who is not enrolled in course 1)
+GET {{host}}/api/courses/2/materials
+Authorization: Bearer {{studentToken}}
+
+
+### List materials — enrolled student → 200
+GET {{host}}/api/courses/1/materials
+Authorization: Bearer {{studentToken}}
+
+
+### List materials — owner teacher → 200
+GET {{host}}/api/courses/1/materials
+Authorization: Bearer {{teacherToken}}
+
+
+### List materials — admin → 200
+GET {{host}}/api/courses/1/materials
+Authorization: Bearer {{adminToken}}
+
+
+### Download — no token → 401
+GET {{host}}/api/materials/{{materialId}}/download
+
+
+### Download — non-enrolled student → 403
+### (use a course/student combination where the student is NOT enrolled)
+GET {{host}}/api/materials/{{materialId}}/download
+Authorization: Bearer {{teacher2Token}}
+
+
+### Download — enrolled student → 200 (binary PDF stream)
+GET {{host}}/api/materials/{{materialId}}/download
+Authorization: Bearer {{studentToken}}
+
+
+### Delete — student → 403
+DELETE {{host}}/api/materials/{{materialId}}
+Authorization: Bearer {{studentToken}}
+
+
+### Delete — different teacher → 403
+DELETE {{host}}/api/materials/{{materialId}}
+Authorization: Bearer {{teacher2Token}}
+
+
+### Delete — owner teacher → 204 (also removes the Drive file)
+DELETE {{host}}/api/materials/{{materialId}}
+Authorization: Bearer {{teacherToken}}
+
+
+### Delete — already-deleted material → 404 MATERIAL_NOT_FOUND
+DELETE {{host}}/api/materials/{{materialId}}
+Authorization: Bearer {{teacherToken}}
+
+
+### ===========================================================================
+### 6. Rate limiter sanity check
 ### ===========================================================================
 ### Fire this >10 times in 15 minutes from the same IP to see 429 RATE_LIMITED
 POST {{host}}/api/auth/login

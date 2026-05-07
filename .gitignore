@@ -34,3 +34,5 @@ backend/credentials/*
 !backend/credentials/.gitkeep
 
 README.md
+
+test-files/

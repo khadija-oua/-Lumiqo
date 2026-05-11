@@ -465,22 +465,18 @@ Content-Type: image/png
 # @name uploadMaterial
 POST {{host}}/api/courses/1/materials
 Authorization: Bearer {{teacherToken}}
-Content-Type: multipart/form-data; boundary=----Form
+Content-Type: multipart/form-data; boundary=boundary
 
-------Form
+--boundary
 Content-Disposition: form-data; name="title"
 
 Cours d'introduction (PDF)
-------Form
+--boundary
 Content-Disposition: form-data; name="file"; filename="sample.pdf"
 Content-Type: application/pdf
 
 < ./test-files/sample.pdf
-------Form--
-
-@materialId = {{uploadMaterial.response.body.material.id}}
-
-
+--boundary--
 ### List materials of a course — no token → 401
 GET {{host}}/api/courses/1/materials
 

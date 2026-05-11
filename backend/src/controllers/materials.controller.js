@@ -176,6 +176,20 @@ async function download(req, res, next) {
     try {
       stream = await driveService.getDownloadStream(material.drive_file_id);
     } catch (driveErr) {
+      const status = driveErr.code || driveErr.response?.status;
+      if (status === 404) {
+        // The DB row points at a Drive file that no longer exists (deleted
+        // outside SmartMoodle, or carried over from a previous Drive auth
+        // setup). Surface as 410 GONE so clients can prompt a re-upload.
+        console.warn(
+          `[materials.download] Drive file gone (fileId=${material.drive_file_id})`,
+        );
+        throw new HttpError(
+          410,
+          'DRIVE_FILE_GONE',
+          "Ce document n'est plus disponible sur Google Drive. Veuillez contacter votre enseignant pour qu'il le téléverse à nouveau.",
+        );
+      }
       console.error(
         `[materials.download] Drive fetch failed (fileId=${material.drive_file_id}):`,
         driveErr.message,

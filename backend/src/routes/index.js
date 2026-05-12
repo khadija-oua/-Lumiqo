@@ -8,6 +8,8 @@ const materialsRoutes = require('./materials.routes');
 const quizzesRoutes = require('./quizzes.routes');
 const attemptsRoutes = require('./attempts.routes');
 const chatRoutes = require('./chat.routes');
+const varkRoutes = require('./vark.routes');
+const learningPathsRoutes = require('./learningPaths.routes');
 const { authLimiter } = require('../middleware/rate-limit');
 
 const router = Router();
@@ -20,5 +22,7 @@ router.use('/materials', materialsRoutes);
 router.use('/quizzes', quizzesRoutes);
 router.use('/attempts', attemptsRoutes);
 router.use('/chat', chatRoutes);
+router.use('/vark', varkRoutes);
+router.use('/learning-paths', learningPathsRoutes);
 
 module.exports = router;

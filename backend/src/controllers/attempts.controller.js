@@ -1,9 +1,29 @@
 const quizzesService = require('../services/quizzes.service');
 const coursesService = require('../services/courses.service');
+const profilingAgent = require('../agents/profilingAgent');
 const { HttpError } = require('../utils/http-error');
 
 const MAX_QUESTIONS_PER_ATTEMPT = 10;
 const DIFFICULTY_LEVELS = ['easy', 'medium', 'hard'];
+
+// Fire-and-forget(-ish) learning-path refresh after a completed attempt.
+// TODO(queue): move this to a background job queue so the student doesn't
+// wait on Gemini at quiz-completion time. For now it's awaited synchronously
+// (per Phase 6 spec) and wrapped so any failure is logged, never thrown.
+async function refreshLearningPathSafely(studentId, quizId) {
+  try {
+    const quiz = await quizzesService.findQuizById(quizId);
+    if (!quiz) return;
+    await profilingAgent.generateLearningPath(studentId, quiz.course_id);
+    console.log(
+      `[attempts] learning path refreshed (student=${studentId} course=${quiz.course_id})`,
+    );
+  } catch (err) {
+    console.warn(
+      `[attempts] learning-path refresh skipped (student=${studentId} quiz=${quizId}): ${err.message}`,
+    );
+  }
+}
 
 function stepDifficulty(current, direction) {
   const idx = DIFFICULTY_LEVELS.indexOf(current);
@@ -98,6 +118,7 @@ async function answer(req, res, next) {
     // Cap: at most MAX_QUESTIONS_PER_ATTEMPT served per attempt.
     if (servedSoFar >= MAX_QUESTIONS_PER_ATTEMPT) {
       const completed = await quizzesService.completeAttempt(attemptId);
+      await refreshLearningPathSafely(req.user.id, attempt.quiz_id);
       return res.json({
         nextQuestion: null,
         isComplete: true,
@@ -115,6 +136,7 @@ async function answer(req, res, next) {
 
     if (!nextQuestion) {
       const completed = await quizzesService.completeAttempt(attemptId);
+      await refreshLearningPathSafely(req.user.id, attempt.quiz_id);
       return res.json({
         nextQuestion: null,
         isComplete: true,

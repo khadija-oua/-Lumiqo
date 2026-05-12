@@ -1,0 +1,164 @@
+{
+  "questions": [
+    {
+      "index": 1,
+      "prompt": "Pour apprendre un nouveau concept, je préfère :",
+      "options": [
+        { "style": "V", "text": "Regarder un schéma ou une infographie." },
+        { "style": "A", "text": "Écouter un podcast ou une explication orale." },
+        { "style": "R", "text": "Lire un article ou un chapitre détaillé." },
+        { "style": "K", "text": "Faire un exercice pratique ou une simulation." }
+      ]
+    },
+    {
+      "index": 2,
+      "prompt": "Quand je révise pour un examen, j'ai tendance à :",
+      "options": [
+        { "style": "V", "text": "Dessiner des cartes mentales colorées." },
+        { "style": "A", "text": "Réciter le cours à voix haute." },
+        { "style": "R", "text": "Relire et reformuler mes notes par écrit." },
+        { "style": "K", "text": "Refaire les exercices et manipuler les exemples." }
+      ]
+    },
+    {
+      "index": 3,
+      "prompt": "Pour comprendre comment fonctionne un appareil :",
+      "options": [
+        { "style": "V", "text": "Je regarde un diagramme du fonctionnement interne." },
+        { "style": "A", "text": "J'écoute quelqu'un l'expliquer." },
+        { "style": "R", "text": "Je lis le manuel d'utilisation." },
+        { "style": "K", "text": "Je l'utilise et j'expérimente par moi-même." }
+      ]
+    },
+    {
+      "index": 4,
+      "prompt": "Pour me souvenir d'un trajet en ville :",
+      "options": [
+        { "style": "V", "text": "Je visualise une carte mentale du parcours." },
+        { "style": "A", "text": "Je répète à voix haute la suite des rues." },
+        { "style": "R", "text": "J'écris les indications étape par étape." },
+        { "style": "K", "text": "Je refais le trajet plusieurs fois physiquement." }
+      ]
+    },
+    {
+      "index": 5,
+      "prompt": "Quand je rédige un travail, je commence par :",
+      "options": [
+        { "style": "V", "text": "Dessiner un plan visuel avec des bulles et des flèches." },
+        { "style": "A", "text": "Enregistrer mes idées au dictaphone et les écouter." },
+        { "style": "R", "text": "Rédiger une liste détaillée des points à aborder." },
+        { "style": "K", "text": "Faire un premier brouillon rapide puis l'améliorer." }
+      ]
+    },
+    {
+      "index": 6,
+      "prompt": "Le meilleur cours est celui qui contient :",
+      "options": [
+        { "style": "V", "text": "Beaucoup de graphiques et de schémas." },
+        { "style": "A", "text": "Des explications orales engageantes du professeur." },
+        { "style": "R", "text": "Un polycopié écrit complet et structuré." },
+        { "style": "K", "text": "Des activités pratiques et des exercices guidés." }
+      ]
+    },
+    {
+      "index": 7,
+      "prompt": "Pour expliquer une notion à un camarade :",
+      "options": [
+        { "style": "V", "text": "Je lui dessine un schéma." },
+        { "style": "A", "text": "Je lui explique de vive voix." },
+        { "style": "R", "text": "Je lui rédige un résumé écrit." },
+        { "style": "K", "text": "Je lui montre par un exemple concret ou un exercice." }
+      ]
+    },
+    {
+      "index": 8,
+      "prompt": "Quand je découvre un nouveau logiciel :",
+      "options": [
+        { "style": "V", "text": "Je regarde un tutoriel vidéo." },
+        { "style": "A", "text": "Je demande à quelqu'un de m'expliquer." },
+        { "style": "R", "text": "Je lis la documentation." },
+        { "style": "K", "text": "J'explore en cliquant et en essayant moi-même." }
+      ]
+    },
+    {
+      "index": 9,
+      "prompt": "Pour mémoriser une formule :",
+      "options": [
+        { "style": "V", "text": "Je l'écris en grand sur une affiche colorée." },
+        { "style": "A", "text": "Je la répète à voix haute plusieurs fois." },
+        { "style": "R", "text": "Je la recopie plusieurs fois dans mon cahier." },
+        { "style": "K", "text": "Je l'applique dans plusieurs exercices différents." }
+      ]
+    },
+    {
+      "index": 10,
+      "prompt": "En cours magistral, je profite le mieux quand :",
+      "options": [
+        { "style": "V", "text": "Le professeur projette des schémas et des images." },
+        { "style": "A", "text": "Le professeur explique clairement avec des exemples parlés." },
+        { "style": "R", "text": "Il y a un support écrit que je peux annoter." },
+        { "style": "K", "text": "Il y a des démonstrations et des objets manipulables." }
+      ]
+    },
+    {
+      "index": 11,
+      "prompt": "Pour résoudre un problème difficile :",
+      "options": [
+        { "style": "V", "text": "Je dessine la situation pour mieux la visualiser." },
+        { "style": "A", "text": "J'en discute avec quelqu'un à voix haute." },
+        { "style": "R", "text": "Je rédige les données et la démarche pas à pas." },
+        { "style": "K", "text": "J'essaie plusieurs approches concrètes par essai-erreur." }
+      ]
+    },
+    {
+      "index": 12,
+      "prompt": "Pour prendre des notes en classe :",
+      "options": [
+        { "style": "V", "text": "Je fais des schémas et j'utilise des couleurs." },
+        { "style": "A", "text": "J'enregistre le cours en audio quand je peux." },
+        { "style": "R", "text": "Je rédige des phrases complètes et structurées." },
+        { "style": "K", "text": "Je note surtout les exemples et les exercices." }
+      ]
+    },
+    {
+      "index": 13,
+      "prompt": "Pour comprendre une statistique :",
+      "options": [
+        { "style": "V", "text": "Je regarde le graphique." },
+        { "style": "A", "text": "J'écoute quelqu'un commenter les chiffres." },
+        { "style": "R", "text": "Je lis les valeurs précises dans un tableau." },
+        { "style": "K", "text": "Je manipule les données dans un tableur." }
+      ]
+    },
+    {
+      "index": 14,
+      "prompt": "Quand je ne comprends pas quelque chose :",
+      "options": [
+        { "style": "V", "text": "Je cherche une image ou une vidéo qui l'illustre." },
+        { "style": "A", "text": "Je demande à quelqu'un de me l'expliquer à voix haute." },
+        { "style": "R", "text": "Je cherche une explication écrite plus détaillée." },
+        { "style": "K", "text": "J'essaie de le faire par moi-même pour mieux saisir." }
+      ]
+    },
+    {
+      "index": 15,
+      "prompt": "Pour me préparer à une présentation orale :",
+      "options": [
+        { "style": "V", "text": "Je prépare un support visuel détaillé." },
+        { "style": "A", "text": "Je m'entraîne à voix haute plusieurs fois." },
+        { "style": "R", "text": "Je rédige le texte intégral de mon discours." },
+        { "style": "K", "text": "Je répète ma présentation en simulant la salle." }
+      ]
+    },
+    {
+      "index": 16,
+      "prompt": "Si je devais apprendre une nouvelle langue :",
+      "options": [
+        { "style": "V", "text": "Je préférerais regarder des films sous-titrés." },
+        { "style": "A", "text": "Je préférerais écouter des podcasts et discuter." },
+        { "style": "R", "text": "Je préférerais lire des livres simples et faire des fiches." },
+        { "style": "K", "text": "Je préférerais voyager et m'immerger directement." }
+      ]
+    }
+  ]
+}

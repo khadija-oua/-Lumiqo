@@ -307,6 +307,28 @@ async function getAttemptBreakdown(attemptId) {
   return rows.map((r) => ({ ...r, is_correct: !!r.is_correct }));
 }
 
+// Recent completed attempts on quizzes from a specific course — used by the
+// profiling agent to compute average score and most-common end difficulty.
+async function listCompletedAttemptsForStudentCourse(studentId, courseId, limit = 20) {
+  const [rows] = await pool.query(
+    `SELECT qa.id, qa.quiz_id, qa.score, qa.total_questions, qa.correct_answers,
+            qa.current_difficulty, qa.started_at, qa.completed_at,
+            q.title AS quiz_title, q.difficulty AS quiz_difficulty
+       FROM quiz_attempts qa
+       JOIN quizzes q ON q.id = qa.quiz_id
+      WHERE qa.student_id = ?
+        AND q.course_id = ?
+        AND qa.completed_at IS NOT NULL
+      ORDER BY qa.completed_at DESC
+      LIMIT ?`,
+    [studentId, courseId, limit],
+  );
+  return rows.map((r) => ({
+    ...r,
+    score: r.score == null ? null : Number(r.score),
+  }));
+}
+
 module.exports = {
   findQuizById,
   listForCourse,
@@ -324,4 +346,5 @@ module.exports = {
   loadQuestionForStudent,
   findNextQuestion,
   getAttemptBreakdown,
+  listCompletedAttemptsForStudentCourse,
 };

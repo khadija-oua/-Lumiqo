@@ -26,4 +26,21 @@ async function ensureCourseReadAccess(user, courseId) {
   throw new HttpError(403, 'FORBIDDEN', 'Accès refusé.');
 }
 
-module.exports = { ensureCourseReadAccess };
+// Returns true if `teacherId` owns at least one course in which `studentId`
+// is enrolled. Used by GET /api/vark/student/:id to let a teacher view the
+// VARK profile of a student they actually teach.
+async function teacherHasStudent(teacherId, studentId) {
+  const { pool } = require('../config/db');
+  const [rows] = await pool.query(
+    `SELECT 1
+       FROM enrollments e
+       JOIN courses c ON c.id = e.course_id
+      WHERE e.student_id = ?
+        AND c.teacher_id = ?
+      LIMIT 1`,
+    [studentId, teacherId],
+  );
+  return rows.length > 0;
+}
+
+module.exports = { ensureCourseReadAccess, teacherHasStudent };

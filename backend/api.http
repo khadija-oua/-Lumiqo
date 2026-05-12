@@ -853,7 +853,173 @@ Authorization: Bearer {{studentToken}}
 
 
 ### ===========================================================================
-### 8. Rate limiter sanity check
+### 8. VARK questionnaire (Phase 6)
+### ===========================================================================
+
+### Get the questionnaire — any authenticated user → 200 (16 questions)
+GET {{host}}/api/vark/questions
+Authorization: Bearer {{studentToken}}
+
+
+### Submit — wrong role → 403
+POST {{host}}/api/vark/submit
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{ "responses": [] }
+
+
+### Submit — incomplete (only 2 answers) → 400 INCOMPLETE_QUESTIONNAIRE
+POST {{host}}/api/vark/submit
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "responses": [
+    { "questionIndex": 1, "selectedStyles": ["V"] },
+    { "questionIndex": 2, "selectedStyles": ["A"] }
+  ]
+}
+
+
+### Submit — invalid style letter → 400 VALIDATION_ERROR
+POST {{host}}/api/vark/submit
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "responses": [
+    { "questionIndex": 1, "selectedStyles": ["X"] }
+  ]
+}
+
+
+### Submit — full valid submission (all 16, varied) → 201
+POST {{host}}/api/vark/submit
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "responses": [
+    { "questionIndex": 1,  "selectedStyles": ["V"] },
+    { "questionIndex": 2,  "selectedStyles": ["V", "R"] },
+    { "questionIndex": 3,  "selectedStyles": ["V"] },
+    { "questionIndex": 4,  "selectedStyles": ["V"] },
+    { "questionIndex": 5,  "selectedStyles": ["V", "K"] },
+    { "questionIndex": 6,  "selectedStyles": ["V"] },
+    { "questionIndex": 7,  "selectedStyles": ["V"] },
+    { "questionIndex": 8,  "selectedStyles": ["V"] },
+    { "questionIndex": 9,  "selectedStyles": ["A"] },
+    { "questionIndex": 10, "selectedStyles": ["A"] },
+    { "questionIndex": 11, "selectedStyles": ["R"] },
+    { "questionIndex": 12, "selectedStyles": ["R"] },
+    { "questionIndex": 13, "selectedStyles": ["K"] },
+    { "questionIndex": 14, "selectedStyles": ["K"] },
+    { "questionIndex": 15, "selectedStyles": ["V"] },
+    { "questionIndex": 16, "selectedStyles": ["A"] }
+  ]
+}
+
+
+### GET own profile — 200
+GET {{host}}/api/vark/me
+Authorization: Bearer {{studentToken}}
+
+
+### GET own profile — teacher (wrong role) → 403
+GET {{host}}/api/vark/me
+Authorization: Bearer {{teacherToken}}
+
+
+### GET student profile — teacher of an enrolled course → 200
+### (use teacher1 + student1 who is enrolled in course 1 per the seed)
+GET {{host}}/api/vark/student/4
+Authorization: Bearer {{teacherToken}}
+
+
+### GET student profile — teacher who does NOT teach this student → 403
+GET {{host}}/api/vark/student/4
+Authorization: Bearer {{teacher2Token}}
+
+
+### GET student profile — admin → 200
+GET {{host}}/api/vark/student/4
+Authorization: Bearer {{adminToken}}
+
+
+### GET student profile — student (wrong role) → 403
+GET {{host}}/api/vark/student/4
+Authorization: Bearer {{studentToken}}
+
+
+### ===========================================================================
+### 9. Learning paths (Phase 6)
+### ===========================================================================
+
+### Generate — no token → 401
+POST {{host}}/api/learning-paths/generate
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Generate — teacher (wrong role) → 403
+POST {{host}}/api/learning-paths/generate
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Generate — student not enrolled in the course → 403
+POST {{host}}/api/learning-paths/generate
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 99999 }
+
+
+### Generate — student enrolled → 201 (10–30 s Gemini call)
+POST {{host}}/api/learning-paths/generate
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Generate — path already exists → 409 PATH_EXISTS
+POST {{host}}/api/learning-paths/generate
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Refresh — always regenerates → 200
+POST {{host}}/api/learning-paths/refresh
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 1 }
+
+
+### Get saved path — student → 200
+GET {{host}}/api/learning-paths/me?courseId=1
+Authorization: Bearer {{studentToken}}
+
+
+### Get saved path — wrong course (no path yet) → 404
+GET {{host}}/api/learning-paths/me?courseId=2
+Authorization: Bearer {{studentToken}}
+
+
+### Get saved path — missing courseId query param → 400
+GET {{host}}/api/learning-paths/me
+Authorization: Bearer {{studentToken}}
+
+
+### ===========================================================================
+### 10. Rate limiter sanity check
 ### ===========================================================================
 ### Fire this >10 times in 15 minutes from the same IP to see 429 RATE_LIMITED
 POST {{host}}/api/auth/login

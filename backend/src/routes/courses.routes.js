@@ -3,6 +3,7 @@ const { body, param } = require('express-validator');
 
 const coursesController = require('../controllers/courses.controller');
 const materialsController = require('../controllers/materials.controller');
+const quizzesController = require('../controllers/quizzes.controller');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { uploadPdf } = require('../middleware/upload');
@@ -102,6 +103,15 @@ router.post(
   ],
   validate,
   materialsController.upload,
+);
+
+// --- Quizzes for a course --------------------------------------------------
+
+router.get(
+  '/:courseId/quizzes',
+  [param('courseId').isInt({ min: 1 }).withMessage('ID de cours invalide.')],
+  validate,
+  quizzesController.listForCourse,
 );
 
 module.exports = router;

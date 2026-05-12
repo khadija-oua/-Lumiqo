@@ -37,10 +37,15 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`SmartMoodle backend listening on port ${PORT}`);
   pool
     .query('SELECT 1')
     .then(() => console.log('MySQL pool: connection OK'))
     .catch((err) => console.error('MySQL pool: connection FAILED', err.message));
 });
+
+// Quiz generation can take ~10–30 s (Gemini + PDF extraction). Match Node's
+// own default to make the upper bound explicit rather than relying on it.
+server.requestTimeout = 5 * 60 * 1000; // 5 min
+server.headersTimeout = 60 * 1000;

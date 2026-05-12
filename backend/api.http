@@ -477,6 +477,12 @@ Content-Type: application/pdf
 
 < ./test-files/sample.pdf
 --boundary--
+
+###
+
+@materialId = {{uploadMaterial.response.body.material.id}}
+
+###
 ### List materials of a course — no token → 401
 GET {{host}}/api/courses/1/materials
 
@@ -538,7 +544,178 @@ Authorization: Bearer {{teacherToken}}
 
 
 ### ===========================================================================
-### 6. Rate limiter sanity check
+### 6. Quizzes (Phase 4 — AI-generated MCQ from PDF + adaptive taking flow)
+### ===========================================================================
+### Pre-requisite: a PDF has been uploaded (run the upload block in section 5
+### first and reuse @materialId). Gemini env vars must be set.
+
+### Generate quiz — no token → 401
+POST {{host}}/api/materials/{{materialId}}/generate-quiz
+Content-Type: {{contentType}}
+
+{}
+
+
+### Generate quiz — student (wrong role) → 403
+POST {{host}}/api/materials/{{materialId}}/generate-quiz
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{}
+
+
+### Generate quiz — non-owner teacher → 403
+POST {{host}}/api/materials/{{materialId}}/generate-quiz
+Authorization: Bearer {{teacher2Token}}
+Content-Type: {{contentType}}
+
+{}
+
+
+### Generate quiz — owner teacher, default mix (4/4/2) → 201 (10–30 s)
+# @name generateQuiz
+POST {{host}}/api/materials/{{materialId}}/generate-quiz
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{}
+###
+@quizId = {{generateQuiz.response.body.quiz.id}}
+
+
+### Generate quiz — custom mix → 201
+POST {{host}}/api/materials/{{materialId}}/generate-quiz
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{
+  "numEasy": 3,
+  "numMedium": 3,
+  "numHard": 2
+}
+
+
+### Generate quiz — invalid counts (total 0) → 400
+POST {{host}}/api/materials/{{materialId}}/generate-quiz
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{
+  "numEasy": 0,
+  "numMedium": 0,
+  "numHard": 0
+}
+
+
+### Get quiz — student, is_correct stripped → 200
+GET {{host}}/api/quizzes/{{quizId}}
+Authorization: Bearer {{studentToken}}
+
+
+### Get quiz — owner teacher, full answers → 200
+GET {{host}}/api/quizzes/{{quizId}}
+Authorization: Bearer {{teacherToken}}
+
+
+### List quizzes for a course — enrolled student → 200
+GET {{host}}/api/courses/1/quizzes
+Authorization: Bearer {{studentToken}}
+
+
+### Start a quiz — teacher (wrong role) → 403
+POST {{host}}/api/quizzes/{{quizId}}/start
+Authorization: Bearer {{teacherToken}}
+
+
+### Start a quiz — non-enrolled student → 403
+POST {{host}}/api/quizzes/{{quizId}}/start
+Authorization: Bearer {{teacher2Token}}
+
+
+### Start a quiz — enrolled student → 201
+# @name startAttempt
+POST {{host}}/api/quizzes/{{quizId}}/start
+Authorization: Bearer {{studentToken}}
+
+@attemptId = {{startAttempt.response.body.attempt.id}}
+@firstQuestionId = {{startAttempt.response.body.question.id}}
+@firstAnswerId = {{startAttempt.response.body.question.answers.0.id}}
+
+
+### Answer a question — no token → 401
+POST {{host}}/api/attempts/{{attemptId}}/answer
+Content-Type: {{contentType}}
+
+{ "questionId": {{firstQuestionId}}, "selectedAnswerId": {{firstAnswerId}} }
+
+
+### Answer — wrong student → 403
+POST {{host}}/api/attempts/{{attemptId}}/answer
+Authorization: Bearer {{teacher2Token}}
+Content-Type: {{contentType}}
+
+{ "questionId": {{firstQuestionId}}, "selectedAnswerId": {{firstAnswerId}} }
+
+
+### Answer — invalid (mismatched question/answer) → 400
+POST {{host}}/api/attempts/{{attemptId}}/answer
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "questionId": {{firstQuestionId}}, "selectedAnswerId": 999999 }
+
+
+### Answer — owner student, first question → 200 (next question included)
+# @name answer1
+POST {{host}}/api/attempts/{{attemptId}}/answer
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "questionId": {{firstQuestionId}}, "selectedAnswerId": {{firstAnswerId}} }
+###
+@nextQuestionId = {{answer1.response.body.nextQuestion.id}}
+###
+@nextAnswerId = {{answer1.response.body.nextQuestion.answers.0.id}}
+
+
+### Answer — duplicate question → 409 QUESTION_ALREADY_ANSWERED
+POST {{host}}/api/attempts/{{attemptId}}/answer
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "questionId": {{firstQuestionId}}, "selectedAnswerId": {{firstAnswerId}} }
+
+
+### Answer — keep going (repeat manually until isComplete=true)
+POST {{host}}/api/attempts/{{attemptId}}/answer
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "questionId": {{nextQuestionId}}, "selectedAnswerId": {{nextAnswerId}} }
+
+
+### Result — student owner → 200 (full breakdown with correct answers)
+GET {{host}}/api/attempts/{{attemptId}}/result
+Authorization: Bearer {{studentToken}}
+
+
+### Result — owner teacher → 200
+GET {{host}}/api/attempts/{{attemptId}}/result
+Authorization: Bearer {{teacherToken}}
+
+
+### Result — different teacher → 403
+GET {{host}}/api/attempts/{{attemptId}}/result
+Authorization: Bearer {{teacher2Token}}
+
+
+### Result — different student → 403
+GET {{host}}/api/attempts/{{attemptId}}/result
+Authorization: Bearer {{studentToken}}
+
+
+### ===========================================================================
+### 7. Rate limiter sanity check
 ### ===========================================================================
 ### Fire this >10 times in 15 minutes from the same IP to see 429 RATE_LIMITED
 POST {{host}}/api/auth/login

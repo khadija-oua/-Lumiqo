@@ -49,4 +49,22 @@ async function generateText(prompt) {
   };
 }
 
-module.exports = { generateJson, generateText, SchemaType };
+// Multi-turn chat. `history` is an array of {role: 'user'|'model', parts: [{text}]}
+// representing the conversation BEFORE the current user turn. `userMessage` is
+// the new student turn. `systemInstruction` is set on the model itself
+// (Gemini treats it separately from chat history).
+async function generateChat({ history, systemInstruction, userMessage }) {
+  const c = getClient();
+  const model = c.getGenerativeModel({
+    model: getModelName(),
+    systemInstruction,
+  });
+  const chat = model.startChat({ history });
+  const result = await chat.sendMessage(userMessage);
+  return {
+    text: result.response.text(),
+    usage: result.response.usageMetadata,
+  };
+}
+
+module.exports = { generateJson, generateText, generateChat, SchemaType };

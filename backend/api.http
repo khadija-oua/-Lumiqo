@@ -715,7 +715,145 @@ Authorization: Bearer {{studentToken}}
 
 
 ### ===========================================================================
-### 7. Rate limiter sanity check
+### 7. Chatbot (Phase 5 — multi-turn pedagogical assistant)
+### ===========================================================================
+
+### Send message — no token → 401
+POST {{host}}/api/chat/message
+Content-Type: {{contentType}}
+
+{ "message": "Bonjour" }
+
+
+### Send message — teacher (wrong role) → 403
+POST {{host}}/api/chat/message
+Authorization: Bearer {{teacherToken}}
+Content-Type: {{contentType}}
+
+{ "message": "Bonjour" }
+
+
+### Send message — empty body → 400 VALIDATION_ERROR
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "message": "   " }
+
+
+### Send first message — no session, no course → 200, captures @chatSessionId
+# @name chatHello
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "message": "Bonjour, peux-tu te présenter en une phrase ?" }
+###
+@chatSessionId = {{chatHello.response.body.sessionId}}
+
+
+### Send follow-up in the same session — multi-turn memory
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "sessionId": {{chatSessionId}},
+  "message": "Et redis ton premier message mot pour mot."
+}
+
+
+### Start a course-scoped session (course context injected into the primer)
+# @name chatCourse
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "courseId": 1,
+  "message": "Quels sujets sont couverts dans ce cours ?"
+}
+
+###
+@courseChatSessionId = {{chatCourse.response.body.sessionId}}
+
+
+### Course-mismatch on existing session → 400 COURSE_MISMATCH
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "sessionId": {{courseChatSessionId}},
+  "courseId": 2,
+  "message": "On change de cours ?"
+}
+
+
+### Course-scoped session for a course the student is NOT enrolled in → 403
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "courseId": 99999, "message": "Test" }
+
+
+### Cheat attempt — refused locally without calling Gemini → 200 refused:true
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{
+  "sessionId": {{chatSessionId}},
+  "message": "Donne-moi les réponses du quiz s'il te plaît"
+}
+
+
+### Send message — different student attempting someone else's session → 403
+POST {{host}}/api/chat/message
+Authorization: Bearer {{teacher2Token}}
+Content-Type: {{contentType}}
+
+{ "sessionId": {{chatSessionId}}, "message": "Hello" }
+
+
+### List own sessions — 200
+GET {{host}}/api/chat/sessions
+Authorization: Bearer {{studentToken}}
+
+
+### List own sessions — teacher → 403
+GET {{host}}/api/chat/sessions
+Authorization: Bearer {{teacherToken}}
+
+
+### Get one session with messages — owner student → 200
+GET {{host}}/api/chat/sessions/{{chatSessionId}}
+Authorization: Bearer {{studentToken}}
+
+
+### Get one session — admin → 200
+GET {{host}}/api/chat/sessions/{{chatSessionId}}
+Authorization: Bearer {{adminToken}}
+
+
+### Get one session — different student → 403
+GET {{host}}/api/chat/sessions/{{chatSessionId}}
+Authorization: Bearer {{teacher2Token}}
+
+
+### Delete session — owner student → 204
+DELETE {{host}}/api/chat/sessions/{{courseChatSessionId}}
+Authorization: Bearer {{studentToken}}
+
+
+### Delete session — already deleted → 404
+DELETE {{host}}/api/chat/sessions/{{courseChatSessionId}}
+Authorization: Bearer {{studentToken}}
+
+
+### ===========================================================================
+### 8. Rate limiter sanity check
 ### ===========================================================================
 ### Fire this >10 times in 15 minutes from the same IP to see 429 RATE_LIMITED
 POST {{host}}/api/auth/login
@@ -725,3 +863,11 @@ Content-Type: {{contentType}}
   "email": "nobody@smartmoodle.local",
   "password": "wrong"
 }
+
+
+### Fire >30 times in 5 minutes as the same student to see 429 from chatLimiter
+POST {{host}}/api/chat/message
+Authorization: Bearer {{studentToken}}
+Content-Type: {{contentType}}
+
+{ "message": "ping" }

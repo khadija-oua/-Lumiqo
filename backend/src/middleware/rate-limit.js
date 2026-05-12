@@ -14,4 +14,21 @@ const authLimiter = rateLimit({
   },
 });
 
-module.exports = { authLimiter };
+// 30 messages per 5 minutes PER USER, scoped to /api/chat/message.
+// Must run AFTER requireAuth so req.user.id is populated.
+const chatLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user?.id ? `user:${req.user.id}` : `ip:${req.ip}`),
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message:
+        'Trop de messages envoyés au chatbot. Veuillez patienter quelques minutes.',
+    },
+  },
+});
+
+module.exports = { authLimiter, chatLimiter };

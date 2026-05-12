@@ -7,6 +7,7 @@ const adminRoutes = require('./admin.routes');
 const materialsRoutes = require('./materials.routes');
 const quizzesRoutes = require('./quizzes.routes');
 const attemptsRoutes = require('./attempts.routes');
+const chatRoutes = require('./chat.routes');
 const { authLimiter } = require('../middleware/rate-limit');
 
 const router = Router();
@@ -18,5 +19,6 @@ router.use('/admin', adminRoutes);
 router.use('/materials', materialsRoutes);
 router.use('/quizzes', quizzesRoutes);
 router.use('/attempts', attemptsRoutes);
+router.use('/chat', chatRoutes);
 
 module.exports = router;

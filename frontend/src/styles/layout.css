@@ -40,6 +40,10 @@
   grid-template-columns: var(--sidebar-width) 1fr;
 }
 
+.sidebar-scrim {
+  display: none;
+}
+
 .sidebar {
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
@@ -504,14 +508,30 @@
 .chat-input-bar {
   display: flex;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-4);
   border-top: 1px solid var(--border-subtle);
   align-items: flex-end;
 }
-.chat-input-bar textarea {
+.chat-input-bar > .field {
   flex: 1;
+  min-width: 0;
+  gap: 0;
+}
+.chat-input-bar .textarea {
+  min-height: 44px;
+  max-height: 160px; /* ~6 lines at 22px line-height + padding */
+  padding: 12px var(--space-4);
+  border-color: var(--border-default);
   resize: none;
-  max-height: 140px;
+  line-height: var(--leading-normal);
+}
+.chat-input-bar .btn-primary {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 /* ---- VARK wizard -------------------------------------------------------- */

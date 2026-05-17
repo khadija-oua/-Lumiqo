@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, Trash2, ArrowLeft, Sparkles } from 'lucide-react';
@@ -340,26 +340,240 @@ function QuizzesTab({ courseId }) {
     queryKey: ['quizzes', courseId],
     queryFn: () => quizzesApi.listCourseQuizzes(courseId),
   });
-  if (quizzes.isLoading) return <SkeletonStack rows={2} height={60} />;
+  const [resultsFor, setResultsFor] = useState(null);
+
+  if (quizzes.isLoading) return <SkeletonStack rows={2} height={80} />;
   if (!quizzes.data?.length) return <EmptyState description={t.courses.noQuizzes} />;
   return (
-    <div>
-      {quizzes.data.map((q) => (
-        <div key={q.id} className="material-row">
-          <div className="material-info">
-            <div className="material-title">{q.title}</div>
-            <div className="material-meta hstack">
-              <Badge variant="brand">{q.difficulty}</Badge>
-              {q.generated_by_ai ? <Badge variant="info">IA</Badge> : null}
-              <span className="text-xs muted">{formatDateFr(q.created_at)}</span>
-            </div>
+    <>
+      <div className="stack">
+        {quizzes.data.map((q) => (
+          <QuizManageRow key={q.id} quiz={q} onSeeResults={() => setResultsFor(q)} />
+        ))}
+      </div>
+      <QuizResultsModal quiz={resultsFor} onClose={() => setResultsFor(null)} />
+    </>
+  );
+}
+
+function QuizManageRow({ quiz, onSeeResults }) {
+  const qc = useQueryClient();
+  const [localMax, setLocalMax] = useState(quiz.max_attempts ?? 1);
+
+  // Keep the local max input in sync if the server-side value changes
+  // (e.g., after the optimistic update settles).
+  useEffect(() => {
+    setLocalMax(quiz.max_attempts ?? 1);
+  }, [quiz.max_attempts]);
+
+  const setMode = useMutation({
+    mutationFn: (payload) => quizzesApi.updateMode(quiz.id, payload),
+    onSuccess: (updated) => {
+      qc.setQueryData(['quizzes', quiz.course_id], (prev) =>
+        (prev || []).map((q) =>
+          q.id === updated.id
+            ? { ...q, mode: updated.mode, max_attempts: updated.max_attempts, show_answers: updated.show_answers }
+            : q,
+        ),
+      );
+      toast.success(t.manage.modeSaved);
+    },
+    onError: (e) => toast.error(apiMessage(e)),
+  });
+
+  // Debounced save when the teacher changes max_attempts in evaluation mode.
+  useEffect(() => {
+    if (quiz.mode !== 'evaluation') return undefined;
+    if (localMax === quiz.max_attempts) return undefined;
+    if (!Number.isInteger(localMax) || localMax < 1 || localMax > 10) return undefined;
+    const t = setTimeout(() => {
+      setMode.mutate({ mode: 'evaluation', maxAttempts: localMax });
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localMax]);
+
+  const switchMode = (nextMode) => {
+    if (nextMode === quiz.mode) return;
+    if (nextMode === 'training') setMode.mutate({ mode: 'training' });
+    else setMode.mutate({ mode: 'evaluation', maxAttempts: Math.max(1, Math.min(10, localMax || 1)) });
+  };
+
+  const modeBadge =
+    quiz.mode === 'evaluation' ? (
+      <Badge variant="brand">{t.quiz.badgeEvaluation(quiz.max_attempts ?? '?')}</Badge>
+    ) : (
+      <Badge variant="success">{t.quiz.badgeTraining}</Badge>
+    );
+
+  return (
+    <div className="card card-padded">
+      <div className="hstack-between" style={{ alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div className="weight-semibold">{quiz.title}</div>
+          <div className="hstack" style={{ gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+            {modeBadge}
+            <Badge>{quiz.difficulty}</Badge>
+            {quiz.generated_by_ai ? <Badge variant="info">IA</Badge> : null}
+            <span className="text-xs muted">{formatDateFr(quiz.created_at)}</span>
           </div>
-          <Link to={`/quizzes/${q.id}`} className="btn btn-secondary btn-sm">
+        </div>
+        <div className="hstack">
+          <Button variant="secondary" size="sm" onClick={onSeeResults}>
+            {t.manage.seeResults}
+          </Button>
+          <Link to={`/quizzes/${quiz.id}`} className="btn btn-ghost btn-sm">
             Voir
           </Link>
         </div>
-      ))}
+      </div>
+
+      <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <div className="text-sm weight-medium" style={{ color: 'var(--text-secondary)' }}>
+          {t.quiz.modeLabel}
+        </div>
+        <div className="hstack" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`btn btn-sm ${quiz.mode === 'training' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => switchMode('training')}
+            disabled={setMode.isPending}
+          >
+            📝 {t.quiz.modeTraining}
+          </button>
+          <button
+            type="button"
+            className={`btn btn-sm ${quiz.mode === 'evaluation' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => switchMode('evaluation')}
+            disabled={setMode.isPending}
+          >
+            🎯 {t.quiz.modeEvaluation}
+          </button>
+        </div>
+
+        {quiz.mode === 'evaluation' && (
+          <div style={{ maxWidth: 220 }}>
+            <Input
+              type="number"
+              label={t.quiz.maxAttemptsLabel}
+              min={1}
+              max={10}
+              value={localMax}
+              onChange={(e) => setLocalMax(Number(e.target.value))}
+              helper={t.quiz.maxAttemptsHelp(Math.max(1, Math.min(10, localMax || 1)))}
+            />
+          </div>
+        )}
+      </div>
     </div>
+  );
+}
+
+function QuizResultsModal({ quiz, onClose }) {
+  const data = useQuery({
+    queryKey: ['quiz-attempts', quiz?.id],
+    queryFn: () => quizzesApi.listAttempts(quiz.id),
+    enabled: !!quiz,
+  });
+  if (!quiz) return null;
+
+  const summary = data.data?.summary;
+  const attempts = data.data?.attempts || [];
+
+  // Roll the all-attempts list up into per-student rows so the teacher
+  // sees one row per learner with their attempt count + latest score.
+  const byStudent = new Map();
+  for (const a of attempts) {
+    if (!byStudent.has(a.student_id)) {
+      byStudent.set(a.student_id, { latest: a, count: 0 });
+    }
+    byStudent.get(a.student_id).count += 1;
+  }
+  const rows = Array.from(byStudent.values());
+
+  const verdictFor = (score) => {
+    if (score >= 80) return { label: t.manage.verdictExcellent, tone: 'success' };
+    if (score >= 50) return { label: t.manage.verdictGood, tone: 'warning' };
+    return { label: t.manage.verdictNeedsWork, tone: 'danger' };
+  };
+
+  const dist = summary?.scoreDistribution || { excellent: 0, good: 0, needsWork: 0 };
+  const distTotal = dist.excellent + dist.good + dist.needsWork;
+
+  return (
+    <Modal open onClose={onClose} title={`${t.manage.resultsTitle} — ${quiz.title}`} size="lg">
+      {data.isLoading ? (
+        <SkeletonStack rows={3} height={40} />
+      ) : (
+        <div className="stack">
+          <div className="muted text-sm">
+            {summary
+              ? t.manage.resultsSummary(
+                  summary.totalStudents,
+                  summary.averageScore,
+                  summary.completionRate,
+                )
+              : null}
+          </div>
+
+          {distTotal > 0 && (
+            <div
+              role="img"
+              aria-label="Répartition des scores"
+              style={{
+                display: 'flex',
+                height: 10,
+                borderRadius: 'var(--radius-full)',
+                overflow: 'hidden',
+                background: 'var(--bg-surface-2)',
+              }}
+            >
+              <span style={{ width: `${(dist.excellent / distTotal) * 100}%`, background: 'var(--color-success)' }} />
+              <span style={{ width: `${(dist.good / distTotal) * 100}%`, background: 'var(--color-warning)' }} />
+              <span style={{ width: `${(dist.needsWork / distTotal) * 100}%`, background: 'var(--color-danger)' }} />
+            </div>
+          )}
+
+          {rows.length === 0 ? (
+            <EmptyState description={t.manage.resultsEmpty} />
+          ) : (
+            <div className="table-wrap">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t.manage.colStudent}</th>
+                    <th>{t.manage.colScore}</th>
+                    <th>{t.manage.colVerdict}</th>
+                    <th>{t.manage.colAttempts}</th>
+                    <th>{t.manage.colDate}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(({ latest, count }) => {
+                    const score = latest.score ?? 0;
+                    const v = verdictFor(score);
+                    return (
+                      <tr key={latest.student_id}>
+                        <td className="weight-medium">
+                          {latest.first_name} {latest.last_name}
+                          <div className="text-xs muted">{latest.email}</div>
+                        </td>
+                        <td>
+                          <Badge variant={v.tone}>{Math.round(score)}%</Badge>
+                        </td>
+                        <td>{v.label}</td>
+                        <td>{count}</td>
+                        <td className="text-sm muted">{formatDateFr(latest.completed_at)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
 

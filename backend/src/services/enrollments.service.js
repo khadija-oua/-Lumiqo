@@ -37,4 +37,12 @@ async function existsForStudentCourse(studentId, courseId) {
   return rows.length > 0;
 }
 
-module.exports = { enroll, listForStudent, existsForStudentCourse };
+async function countForCourse(courseId) {
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS n FROM enrollments WHERE course_id = ?',
+    [courseId],
+  );
+  return Number(rows[0]?.n || 0);
+}
+
+module.exports = { enroll, listForStudent, existsForStudentCourse, countForCourse };

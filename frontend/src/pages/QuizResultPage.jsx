@@ -32,7 +32,7 @@ export default function QuizResultPage() {
   }
   if (r.error) return <ErrorState error={r.error} onRetry={() => r.refetch()} />;
 
-  const { attempt, quiz, breakdown } = r.data;
+  const { attempt, quiz, breakdown, answersHidden } = r.data;
   const total = attempt.total_questions;
   const correct = attempt.correct_answers;
   const pct = total ? Math.round((correct / total) * 100) : 0;
@@ -65,44 +65,61 @@ export default function QuizResultPage() {
         <div style={{ marginTop: 'var(--space-3)' }} className="weight-medium">
           {congratulations(pct)}
         </div>
+        <div className="muted text-sm" style={{ marginTop: 'var(--space-2)' }}>
+          {t.quiz.correctOutOf(correct, total)}
+        </div>
         <div className="hstack" style={{ justifyContent: 'center', marginTop: 'var(--space-6)' }}>
-          <Button onClick={restart}>
-            <RotateCcw size={16} /> {t.quiz.retake}
-          </Button>
-          <Link to={`/courses/${quiz.course_id}`} className="btn btn-secondary btn-md">
-            {t.quiz.backToCourse}
-          </Link>
+          {answersHidden ? (
+            <Link to={`/courses/${quiz.course_id}`} className="btn btn-primary btn-md">
+              {t.quiz.backToCourse}
+            </Link>
+          ) : (
+            <>
+              <Button onClick={restart}>
+                <RotateCcw size={16} /> {t.quiz.retake}
+              </Button>
+              <Link to={`/courses/${quiz.course_id}`} className="btn btn-secondary btn-md">
+                {t.quiz.backToCourse}
+              </Link>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="stack">
-        {breakdown.map((row, i) => (
-          <div key={row.attempt_answer_id} className="result-question">
-            <div className="hstack-between" style={{ marginBottom: 'var(--space-2)' }}>
-              <span className="weight-medium">
-                {i + 1}. {row.question_text}
-              </span>
-              <Badge variant="brand">{row.difficulty}</Badge>
-            </div>
-            <div className="hstack" style={{ gap: 8 }}>
-              {row.is_correct ? (
-                <CheckCircle2 size={16} color="var(--color-success)" />
-              ) : (
-                <XCircle size={16} color="var(--color-danger)" />
-              )}
-              <span className={row.is_correct ? 'result-answer-correct' : 'result-answer-wrong'}>
-                {t.quiz.youAnswered} : {row.selected_answer_text || '—'}
-              </span>
-            </div>
-            {!row.is_correct && (
-              <div style={{ marginTop: 4 }} className="text-sm">
-                <span className="muted">{t.quiz.correctAnswer} : </span>
-                <span className="result-answer-correct">{row.correct_answer_text}</span>
+      {answersHidden ? (
+        <div className="card card-padded" style={{ textAlign: 'center' }}>
+          <p className="muted">{t.quiz.answersHidden}</p>
+        </div>
+      ) : (
+        <div className="stack">
+          {breakdown.map((row, i) => (
+            <div key={row.attempt_answer_id} className="result-question">
+              <div className="hstack-between" style={{ marginBottom: 'var(--space-2)' }}>
+                <span className="weight-medium">
+                  {i + 1}. {row.question_text}
+                </span>
+                <Badge variant="brand">{row.difficulty}</Badge>
               </div>
-            )}
-          </div>
-        ))}
-      </div>
+              <div className="hstack" style={{ gap: 8 }}>
+                {row.is_correct ? (
+                  <CheckCircle2 size={16} color="var(--color-success)" />
+                ) : (
+                  <XCircle size={16} color="var(--color-danger)" />
+                )}
+                <span className={row.is_correct ? 'result-answer-correct' : 'result-answer-wrong'}>
+                  {t.quiz.youAnswered} : {row.selected_answer_text || '—'}
+                </span>
+              </div>
+              {!row.is_correct && (
+                <div style={{ marginTop: 4 }} className="text-sm">
+                  <span className="muted">{t.quiz.correctAnswer} : </span>
+                  <span className="result-answer-correct">{row.correct_answer_text}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }

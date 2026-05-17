@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, PlayCircle, ArrowLeft } from 'lucide-react';
+import { Download, PlayCircle, ArrowLeft, Lock, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as coursesApi from '../api/courses';
 import * as enrollmentsApi from '../api/enrollments';
@@ -154,26 +154,63 @@ export default function CourseDetailPage() {
               <EmptyState description={t.courses.noQuizzes} />
             ) : (
               <div>
-                {quizzes.data.map((q) => (
-                  <div key={q.id} className="material-row">
-                    <div className="material-info">
-                      <div className="material-title">{q.title}</div>
-                      <div className="material-meta hstack" style={{ gap: 8 }}>
-                        <Badge variant="brand">{difficultyLabel(q.difficulty)}</Badge>
-                        {q.generated_by_ai ? <Badge variant="info">IA</Badge> : null}
+                {quizzes.data.map((q) => {
+                  const isEval = q.mode === 'evaluation';
+                  const used = q.userAttempts ?? 0;
+                  const hasAttempted = used > 0;
+                  const canAttempt = q.canAttempt !== false;
+                  return (
+                    <div key={q.id} className="material-row">
+                      <div className="material-info">
+                        <div className="material-title">{q.title}</div>
+                        <div className="material-meta hstack" style={{ gap: 8, flexWrap: 'wrap' }}>
+                          {isEval ? (
+                            <Badge variant="brand">{t.quiz.badgeEvaluation(q.max_attempts ?? '?')}</Badge>
+                          ) : (
+                            <Badge variant="success">{t.quiz.badgeTraining}</Badge>
+                          )}
+                          <Badge>{difficultyLabel(q.difficulty)}</Badge>
+                          {q.generated_by_ai ? <Badge variant="info">IA</Badge> : null}
+                          {user.role === 'student' && (
+                            <span className="text-xs muted">
+                              {isEval
+                                ? t.quiz.attemptsUsed(used, q.max_attempts ?? '?')
+                                : t.quiz.trainingInfo(used)}
+                            </span>
+                          )}
+                          {user.role === 'student' && hasAttempted && q.lastScore != null && (
+                            <Badge
+                              variant={q.lastScore >= 80 ? 'success' : q.lastScore >= 50 ? 'warning' : 'danger'}
+                            >
+                              {Math.round(q.lastScore)}%
+                            </Badge>
+                          )}
+                        </div>
                       </div>
+                      {user.role === 'student' && enrolled ? (
+                        !canAttempt ? (
+                          <Badge variant="default">
+                            <Lock size={12} style={{ marginRight: 4 }} />
+                            {t.quiz.btnLockedScore(Math.round(q.lastScore ?? 0))}
+                          </Badge>
+                        ) : hasAttempted ? (
+                          <Button onClick={() => navigate(`/quizzes/${q.id}/take`)}>
+                            <RotateCcw size={14} />{' '}
+                            {isEval ? t.quiz.btnRetakeEval : t.quiz.btnRetake}
+                          </Button>
+                        ) : (
+                          <Button onClick={() => navigate(`/quizzes/${q.id}/take`)}>
+                            <PlayCircle size={14} /> {t.quiz.btnStart}
+                          </Button>
+                        )
+                      ) : (
+                        <Link to={`/quizzes/${q.id}`} className="btn btn-secondary btn-sm">
+                          Voir
+                        </Link>
+                      )}
                     </div>
-                    {user.role === 'student' && enrolled ? (
-                      <Button onClick={() => navigate(`/quizzes/${q.id}/take`)}>
-                        <PlayCircle size={14} /> {t.courses.startQuiz}
-                      </Button>
-                    ) : (
-                      <Link to={`/quizzes/${q.id}`} className="btn btn-secondary btn-sm">
-                        Voir
-                      </Link>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

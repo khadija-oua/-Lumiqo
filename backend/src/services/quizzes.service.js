@@ -1,7 +1,8 @@
 const { pool } = require('../config/db');
 
 const QUIZ_COLS =
-  'id, course_id, material_id, title, generated_by_ai, difficulty, created_at';
+  'id, course_id, material_id, title, generated_by_ai, ' +
+  'mode, max_attempts, show_answers, difficulty, created_at';
 const QUESTION_COLS = 'id, quiz_id, question_text, difficulty, created_at';
 const ANSWER_COLS = 'id, question_id, answer_text, is_correct';
 const ATTEMPT_COLS =
@@ -10,12 +11,21 @@ const ATTEMPT_COLS =
 
 // --- Quiz reads ---------------------------------------------------------
 
+function decodeQuizRow(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    generated_by_ai: !!row.generated_by_ai,
+    show_answers: !!row.show_answers,
+  };
+}
+
 async function findQuizById(id) {
   const [rows] = await pool.query(
     `SELECT ${QUIZ_COLS} FROM quizzes WHERE id = ? LIMIT 1`,
     [id],
   );
-  return rows[0] || null;
+  return decodeQuizRow(rows[0]);
 }
 
 async function listForCourse(courseId) {
@@ -23,7 +33,7 @@ async function listForCourse(courseId) {
     `SELECT ${QUIZ_COLS} FROM quizzes WHERE course_id = ? ORDER BY created_at DESC`,
     [courseId],
   );
-  return rows;
+  return rows.map(decodeQuizRow);
 }
 
 // Returns the quiz plus its questions and answers. Answers include is_correct;
@@ -307,6 +317,73 @@ async function getAttemptBreakdown(attemptId) {
   return rows.map((r) => ({ ...r, is_correct: !!r.is_correct }));
 }
 
+// Mode + attempt-limit administration. Training resets max_attempts to NULL
+// and show_answers to TRUE; evaluation requires a 1..10 cap (validated in the
+// controller) and forces show_answers FALSE.
+async function updateQuizMode(quizId, { mode, max_attempts }) {
+  const safeMax = mode === 'training' ? null : max_attempts;
+  const showAnswers = mode === 'training' ? 1 : 0;
+  await pool.query(
+    `UPDATE quizzes SET mode = ?, max_attempts = ?, show_answers = ? WHERE id = ?`,
+    [mode, safeMax, showAnswers, quizId],
+  );
+  return findQuizById(quizId);
+}
+
+async function countAttemptsForStudent(studentId, quizId) {
+  const [rows] = await pool.query(
+    `SELECT COUNT(*) AS n FROM quiz_attempts
+      WHERE student_id = ? AND quiz_id = ? AND completed_at IS NOT NULL`,
+    [studentId, quizId],
+  );
+  return Number(rows[0]?.n || 0);
+}
+
+// All completed attempts on a quiz, joined with the student row so the
+// teacher result table can show names/emails.
+async function listAttemptsForQuiz(quizId) {
+  const [rows] = await pool.query(
+    `SELECT qa.id, qa.student_id, qa.score, qa.total_questions,
+            qa.correct_answers, qa.started_at, qa.completed_at,
+            qa.current_difficulty,
+            u.first_name, u.last_name, u.email
+       FROM quiz_attempts qa
+       JOIN users u ON u.id = qa.student_id
+      WHERE qa.quiz_id = ? AND qa.completed_at IS NOT NULL
+      ORDER BY qa.completed_at DESC`,
+    [quizId],
+  );
+  return rows.map((r) => ({ ...r, score: r.score == null ? null : Number(r.score) }));
+}
+
+// Per-quiz "how many attempts has THIS student completed, and what was
+// the most recent score" — batched so the course-quiz list endpoint can
+// annotate every quiz in one round-trip.
+async function listStudentAttemptStatsForQuizzes(studentId, quizIds) {
+  if (!quizIds || quizIds.length === 0) return [];
+  const [rows] = await pool.query(
+    `SELECT
+        qa.quiz_id,
+        COUNT(*) AS attemptCount,
+        (SELECT score FROM quiz_attempts q2
+          WHERE q2.student_id = qa.student_id AND q2.quiz_id = qa.quiz_id
+            AND q2.completed_at IS NOT NULL
+          ORDER BY q2.completed_at DESC, q2.id DESC
+          LIMIT 1) AS lastScore
+       FROM quiz_attempts qa
+      WHERE qa.student_id = ?
+        AND qa.completed_at IS NOT NULL
+        AND qa.quiz_id IN (?)
+      GROUP BY qa.quiz_id, qa.student_id`,
+    [studentId, quizIds],
+  );
+  return rows.map((r) => ({
+    quiz_id: r.quiz_id,
+    attemptCount: Number(r.attemptCount),
+    lastScore: r.lastScore == null ? null : Number(r.lastScore),
+  }));
+}
+
 // Recent completed attempts on quizzes from a specific course — used by the
 // profiling agent to compute average score and most-common end difficulty.
 async function listCompletedAttemptsForStudentCourse(studentId, courseId, limit = 20) {
@@ -347,4 +424,8 @@ module.exports = {
   findNextQuestion,
   getAttemptBreakdown,
   listCompletedAttemptsForStudentCourse,
+  updateQuizMode,
+  countAttemptsForStudent,
+  listAttemptsForQuiz,
+  listStudentAttemptStatsForQuizzes,
 };

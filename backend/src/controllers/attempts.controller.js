@@ -186,11 +186,26 @@ async function result(req, res, next) {
       throw new HttpError(403, 'FORBIDDEN', 'Accès refusé.');
     }
 
-    const breakdown = await quizzesService.getAttemptBreakdown(id);
+    const fullBreakdown = await quizzesService.getAttemptBreakdown(id);
+    const answersHidden = !quiz.show_answers;
+
+    // Evaluation mode: keep the student's own selections visible but null
+    // out correctness and the canonical correct answer. The overall score
+    // (correct / total) is still returned via the attempt row.
+    const breakdown = answersHidden
+      ? fullBreakdown.map((row) => ({
+          ...row,
+          is_correct: null,
+          correct_answer_id: null,
+          correct_answer_text: null,
+        }))
+      : fullBreakdown;
+
     res.json({
       attempt: { ...attempt, score: attempt.score == null ? null : Number(attempt.score) },
       quiz,
       breakdown,
+      answersHidden,
     });
   } catch (err) {
     next(err);

@@ -1,11 +1,23 @@
 const quizzesService = require('../services/quizzes.service');
 const materialsService = require('../services/materials.service');
 const coursesService = require('../services/courses.service');
+const enrollmentsService = require('../services/enrollments.service');
 const accessService = require('../services/access.service');
 const quizAgent = require('../agents/quizAgent');
 const { HttpError } = require('../utils/http-error');
 
 const MAX_TOTAL_QUESTIONS = 20;
+const MAX_EVAL_ATTEMPTS = 10;
+
+// Ownership / role guard reused by mode-change + attempt-listing endpoints.
+// Admin always passes; teacher must own the course the quiz belongs to.
+async function ensureTeacherOwnsQuiz(user, quiz) {
+  if (user.role === 'admin') return;
+  const course = await coursesService.findById(quiz.course_id);
+  if (!course || course.teacher_id !== user.id) {
+    throw new HttpError(403, 'FORBIDDEN', 'Accès refusé.');
+  }
+}
 
 function stripAnswerCorrectness(answers) {
   return (answers || []).map((a) => ({
@@ -65,6 +77,14 @@ async function generateFromMaterial(req, res, next) {
   }
 }
 
+// Computes canAttempt from mode + attempts used. Training quizzes are
+// always attemptable; evaluation quizzes are gated by max_attempts.
+function deriveCanAttempt(quiz, userAttempts) {
+  if (quiz.mode === 'training') return true;
+  if (quiz.max_attempts == null) return true;
+  return userAttempts < quiz.max_attempts;
+}
+
 // GET /api/quizzes/:id
 async function detail(req, res, next) {
   try {
@@ -74,7 +94,19 @@ async function detail(req, res, next) {
       throw new HttpError(404, 'QUIZ_NOT_FOUND', 'Quiz introuvable.');
     }
     await accessService.ensureCourseReadAccess(req.user, quiz.course_id);
-    const payload = req.user.role === 'student' ? sanitizeQuizForStudent(quiz) : quiz;
+
+    let payload = req.user.role === 'student' ? sanitizeQuizForStudent(quiz) : quiz;
+
+    // Annotate per-student attempt state on the quiz object so the
+    // QuizTakePage can decide between launch / confirm / locked.
+    if (req.user.role === 'student') {
+      const userAttempts = await quizzesService.countAttemptsForStudent(req.user.id, id);
+      payload = {
+        ...payload,
+        userAttempts,
+        canAttempt: deriveCanAttempt(quiz, userAttempts),
+      };
+    }
     res.json({ quiz: payload });
   } catch (err) {
     next(err);
@@ -87,10 +119,25 @@ async function listForCourse(req, res, next) {
     const courseId = Number(req.params.courseId);
     await accessService.ensureCourseReadAccess(req.user, courseId);
     const quizzes = await quizzesService.listForCourse(courseId);
-    // Coerce generated_by_ai TINYINT(1) to boolean for the response
-    res.json({
-      quizzes: quizzes.map((q) => ({ ...q, generated_by_ai: !!q.generated_by_ai })),
-    });
+
+    // Annotate per-student stats (attempt count, last score, canAttempt) on
+    // every quiz so the course detail page can render mode-aware buttons
+    // without N+1 round-trips.
+    if (req.user.role === 'student' && quizzes.length > 0) {
+      const stats = await quizzesService.listStudentAttemptStatsForQuizzes(
+        req.user.id,
+        quizzes.map((q) => q.id),
+      );
+      const byQuiz = new Map(stats.map((s) => [s.quiz_id, s]));
+      for (const q of quizzes) {
+        const s = byQuiz.get(q.id);
+        const userAttempts = s?.attemptCount ?? 0;
+        q.userAttempts = userAttempts;
+        q.lastScore = s?.lastScore ?? null;
+        q.canAttempt = deriveCanAttempt(q, userAttempts);
+      }
+    }
+    res.json({ quizzes });
   } catch (err) {
     next(err);
   }
@@ -106,6 +153,21 @@ async function start(req, res, next) {
     }
     // ensureCourseReadAccess covers enrollment for students.
     await accessService.ensureCourseReadAccess(req.user, quiz.course_id);
+
+    // Evaluation mode: enforce max_attempts BEFORE creating the attempt
+    // so we don't pollute quiz_attempts with rows the student can't finish.
+    if (quiz.mode === 'evaluation' && quiz.max_attempts != null) {
+      const used = await quizzesService.countAttemptsForStudent(req.user.id, quizId);
+      if (used >= quiz.max_attempts) {
+        const err = new HttpError(
+          403,
+          'MAX_ATTEMPTS_REACHED',
+          `Vous avez atteint le nombre maximum de tentatives pour ce quiz (${used}/${quiz.max_attempts}).`,
+          { attemptsUsed: used, maxAttempts: quiz.max_attempts },
+        );
+        throw err;
+      }
+    }
 
     const attempt = await quizzesService.startAttempt(req.user.id, quizId);
     const firstQuestion = await quizzesService.findNextQuestion(
@@ -127,4 +189,100 @@ async function start(req, res, next) {
   }
 }
 
-module.exports = { generateFromMaterial, detail, listForCourse, start };
+// PATCH /api/quizzes/:id/mode  — teacher (owner) or admin
+async function updateMode(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const quiz = await quizzesService.findQuizById(id);
+    if (!quiz) {
+      throw new HttpError(404, 'QUIZ_NOT_FOUND', 'Quiz introuvable.');
+    }
+    await ensureTeacherOwnsQuiz(req.user, quiz);
+
+    const { mode } = req.body;
+    if (mode !== 'training' && mode !== 'evaluation') {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'Le mode doit être "training" ou "evaluation".');
+    }
+
+    let maxAttempts = null;
+    if (mode === 'evaluation') {
+      maxAttempts = Number(req.body.maxAttempts);
+      if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > MAX_EVAL_ATTEMPTS) {
+        throw new HttpError(
+          400,
+          'VALIDATION_ERROR',
+          `maxAttempts doit être un entier entre 1 et ${MAX_EVAL_ATTEMPTS}.`,
+        );
+      }
+    }
+
+    const updated = await quizzesService.updateQuizMode(id, {
+      mode,
+      max_attempts: maxAttempts,
+    });
+    res.json({ quiz: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/quizzes/:id/attempts  — teacher (owner) or admin
+async function listAttempts(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const quiz = await quizzesService.findQuizById(id);
+    if (!quiz) {
+      throw new HttpError(404, 'QUIZ_NOT_FOUND', 'Quiz introuvable.');
+    }
+    await ensureTeacherOwnsQuiz(req.user, quiz);
+
+    const attempts = await quizzesService.listAttemptsForQuiz(id);
+    const enrollmentCount = await enrollmentsService.countForCourse(quiz.course_id);
+
+    // For summary stats we use each student's MOST RECENT attempt, so
+    // distribution + completion rate aren't skewed by repeat takers.
+    const latestByStudent = new Map();
+    for (const a of attempts) {
+      if (!latestByStudent.has(a.student_id)) latestByStudent.set(a.student_id, a);
+    }
+    const latest = Array.from(latestByStudent.values());
+
+    const totalStudents = latest.length;
+    const averageScore = totalStudents > 0
+      ? Number((latest.reduce((s, a) => s + (a.score || 0), 0) / totalStudents).toFixed(2))
+      : null;
+    const completionRate = enrollmentCount > 0
+      ? Number(((totalStudents / enrollmentCount) * 100).toFixed(2))
+      : null;
+
+    const distribution = { excellent: 0, good: 0, needsWork: 0 };
+    for (const a of latest) {
+      const s = a.score ?? 0;
+      if (s >= 80) distribution.excellent += 1;
+      else if (s >= 50) distribution.good += 1;
+      else distribution.needsWork += 1;
+    }
+
+    res.json({
+      attempts,
+      summary: {
+        totalStudents,
+        averageScore,
+        completionRate,
+        scoreDistribution: distribution,
+        enrollmentCount,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = {
+  generateFromMaterial,
+  detail,
+  listForCourse,
+  start,
+  updateMode,
+  listAttempts,
+};

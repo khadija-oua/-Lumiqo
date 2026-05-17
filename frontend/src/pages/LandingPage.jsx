@@ -13,8 +13,11 @@ import {
   BookOpen,
   Check,
   ArrowRight,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import Logo from '../components/Logo';
+import { useTheme } from '../context/ThemeContext';
 import './LandingPage.css';
 
 // ---------------------------------------------------------------------------
@@ -70,12 +73,17 @@ function useCountUp(target, durationMs, enabled) {
 
 function LandingNavbar() {
   const [scrolled, setScrolled] = useState(false);
+  const { theme, toggle } = useTheme();
+
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+
+  const themeLabel =
+    theme === 'dark' ? 'Passer au thème clair' : 'Passer au thème sombre';
 
   return (
     <nav className={`lp-nav ${scrolled ? 'scrolled' : ''}`} aria-label="Navigation principale">
@@ -101,6 +109,15 @@ function LandingNavbar() {
           <Link to="/register" className="btn btn-primary btn-sm">
             S'inscrire
           </Link>
+          <button
+            type="button"
+            className="btn btn-ghost btn-icon-only btn-sm lp-theme-toggle"
+            onClick={toggle}
+            aria-label={themeLabel}
+            title={themeLabel}
+          >
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
         </div>
       </div>
     </nav>

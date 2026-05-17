@@ -66,6 +66,8 @@
 }
 .lp-nav-links a:hover { color: var(--text-primary); background: var(--bg-hover); text-decoration: none; }
 .lp-nav-actions { display: flex; align-items: center; gap: var(--space-2); }
+.lp-theme-toggle { color: var(--text-secondary); }
+.lp-theme-toggle:hover { color: var(--text-primary); }
 
 @media (max-width: 768px) {
   .lp-nav-links { display: none; }

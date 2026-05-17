@@ -5,6 +5,7 @@ import AuthGuard from './guards/AuthGuard';
 import RoleGuard from './guards/RoleGuard';
 import AppLayout from './layouts/AppLayout';
 
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -22,10 +23,11 @@ import AdminPanelPage from './pages/AdminPanelPage';
 
 import { useAuth } from './context/AuthContext';
 
-function RootRedirect() {
+function RootRoute() {
   const { user, status } = useAuth();
   if (status === 'pending') return null;
-  return <Navigate to={user ? '/dashboard' : '/login'} replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <LandingPage />;
 }
 
 export default function App() {
@@ -46,7 +48,7 @@ export default function App() {
         }}
       />
       <Routes>
-        <Route path="/" element={<RootRedirect />} />
+        <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 

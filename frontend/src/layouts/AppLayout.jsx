@@ -33,7 +33,7 @@ const STUDENT_NAV = [
 const TEACHER_NAV = [
   { to: '/dashboard', icon: LayoutDashboard, label: t.nav.dashboard },
   { to: '/courses', icon: BookOpen, label: t.nav.coursesTeacher },
-  { to: '/dashboard', icon: GraduationCap, label: t.nav.students },
+  { to: '/students', icon: GraduationCap, label: t.nav.students },
 ];
 
 const ADMIN_NAV = [

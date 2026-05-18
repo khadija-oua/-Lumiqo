@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, BookOpen, Users, Target } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import * as coursesApi from '../../api/courses';
@@ -23,7 +22,34 @@ export default function TeacherDashboard() {
   const [form, setForm] = useState({ title: '', description: '', coverImageUrl: '' });
 
   const allCourses = useQuery({ queryKey: ['all-courses'], queryFn: coursesApi.listCourses });
-  const mine = (allCourses.data || []).filter((c) => c.teacher_id === user.id);
+  const mine = useMemo(
+    () => (allCourses.data || []).filter((c) => c.teacher_id === user.id),
+    [allCourses.data, user.id],
+  );
+
+  // Per-course student lists — fetched in parallel via useQueries so the
+  // dashboard can report a unique student count (a student in two of my
+  // courses still counts as one).
+  const studentLists = useQueries({
+    queries: mine.map((c) => ({
+      queryKey: ['course-students', c.id],
+      queryFn: () => coursesApi.listCourseStudents(c.id),
+      // 30s freshness — these don't change minute-to-minute.
+      staleTime: 30_000,
+    })),
+  });
+  const studentsLoading = studentLists.some((q) => q.isLoading);
+  const uniqueStudentCount = useMemo(() => {
+    const ids = new Set();
+    for (const q of studentLists) {
+      if (!q.data) continue;
+      for (const s of q.data) ids.add(s.id);
+    }
+    return ids.size;
+  }, [studentLists]);
+
+  // Aggregate quizzes from the per-course quiz_count subquery on courses.
+  const totalQuizzes = mine.reduce((sum, c) => sum + (c.quiz_count || 0), 0);
 
   const create = useMutation({
     mutationFn: () =>
@@ -46,9 +72,34 @@ export default function TeacherDashboard() {
       <header className="page-header">
         <h1 className="page-title">{t.dashboard.greeting(user.first_name)}</h1>
         <p className="page-subtitle">
-          {t.dashboard.teacherSubtitle(mine.length, '—')}
+          {studentsLoading
+            ? `${mine.length} cours, … étudiants au total`
+            : t.dashboard.teacherSubtitle(mine.length, uniqueStudentCount)}
         </p>
       </header>
+
+      <section className="page-section">
+        <div className="stats-grid">
+          <StatCard
+            icon={<BookOpen size={20} />}
+            value={mine.length}
+            label="Cours actifs"
+            loading={allCourses.isLoading}
+          />
+          <StatCard
+            icon={<Users size={20} />}
+            value={studentsLoading ? null : uniqueStudentCount}
+            label="Étudiants inscrits"
+            loading={studentsLoading}
+          />
+          <StatCard
+            icon={<Target size={20} />}
+            value={allCourses.isLoading ? null : totalQuizzes}
+            label="Quiz générés"
+            loading={allCourses.isLoading}
+          />
+        </div>
+      </section>
 
       <section className="page-section">
         <div className="page-section-header">
@@ -71,7 +122,17 @@ export default function TeacherDashboard() {
         ) : (
           <div className="card-grid">
             {mine.map((c) => (
-              <TeacherCourseCard key={c.id} course={c} />
+              <CourseCard
+                key={c.id}
+                course={c}
+                to={`/courses/${c.id}/manage`}
+                meta={
+                  <span className="muted text-sm">
+                    {c.enrollment_count} étudiant{c.enrollment_count > 1 ? 's' : ''} · {c.material_count}{' '}
+                    matériel{c.material_count > 1 ? 's' : ''} · {c.quiz_count} quiz
+                  </span>
+                }
+              />
             ))}
           </div>
         )}
@@ -116,20 +177,25 @@ export default function TeacherDashboard() {
   );
 }
 
-function TeacherCourseCard({ course }) {
-  const { data: materials = [] } = useQuery({
-    queryKey: ['materials', course.id],
-    queryFn: () => materialsApi.listMaterials(course.id).catch(() => []),
-  });
+function StatCard({ icon, value, label, loading }) {
   return (
-    <CourseCard
-      course={course}
-      to={`/courses/${course.id}/manage`}
-      meta={
-        <span className="muted text-sm">
-          {materials.length} matériel{materials.length > 1 ? 's' : ''}
+    <div
+      className="stat-card"
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+    >
+      <div
+        className="hstack"
+        style={{ color: 'var(--color-brand)', gap: 'var(--space-2)' }}
+      >
+        {icon}
+        <span
+          className="stat-value"
+          style={{ color: 'var(--color-brand)', marginTop: 0, lineHeight: 1 }}
+        >
+          {loading || value == null ? '—' : value}
         </span>
-      }
-    />
+      </div>
+      <div className="stat-label">{label}</div>
+    </div>
   );
 }

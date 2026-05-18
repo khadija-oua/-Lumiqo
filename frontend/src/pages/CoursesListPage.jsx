@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 import * as coursesApi from '../api/courses';
 import * as enrollmentsApi from '../api/enrollments';
 import CourseCard from '../components/CourseCard';
@@ -26,18 +27,30 @@ export default function CoursesListPage() {
     [enrolled.data],
   );
 
+  // Teachers see only their own courses; admin/student see everything.
+  const scoped = useMemo(() => {
+    if (user.role !== 'teacher') return courses.data || [];
+    return (courses.data || []).filter((c) => c.teacher_id === user.id);
+  }, [courses.data, user]);
+
   const filtered = useMemo(() => {
-    const list = courses.data || [];
-    if (!query.trim()) return list;
+    if (!query.trim()) return scoped;
     const q = query.trim().toLowerCase();
-    return list.filter((c) => c.title.toLowerCase().includes(q));
-  }, [courses.data, query]);
+    return scoped.filter((c) => c.title.toLowerCase().includes(q));
+  }, [scoped, query]);
+
+  const pageTitle = user.role === 'teacher' ? t.nav.coursesTeacher : t.courses.listTitle;
+  const pageSubtitle = user.role === 'teacher' ? null : t.courses.listSubtitle;
 
   return (
     <>
       <header className="page-header">
-        <h1 className="page-title">{t.courses.listTitle}</h1>
-        <p className="page-subtitle">{t.courses.listSubtitle}</p>
+        <div className="hstack-between" style={{ flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+          <div>
+            <h1 className="page-title">{pageTitle}</h1>
+            {pageSubtitle && <p className="page-subtitle">{pageSubtitle}</p>}
+          </div>
+        </div>
       </header>
 
       <div
@@ -68,28 +81,82 @@ export default function CoursesListPage() {
       </div>
 
       {courses.isLoading ? (
-        <SkeletonStack rows={3} height={140} />
+        <SkeletonStack rows={3} height={180} />
       ) : courses.error ? (
         <ErrorState error={courses.error} onRetry={() => courses.refetch()} />
       ) : filtered.length === 0 ? (
-        <EmptyState title="Aucun cours" description="Aucun cours ne correspond à cette recherche." />
+        <EmptyState
+          title={
+            user.role === 'teacher' && (courses.data || []).filter((c) => c.teacher_id === user.id).length === 0
+              ? t.dashboard.noCoursesTeacher
+              : 'Aucun cours'
+          }
+          description={
+            user.role === 'teacher'
+              ? null
+              : 'Aucun cours ne correspond à cette recherche.'
+          }
+          action={
+            user.role === 'teacher' ? (
+              <Link to="/dashboard" className="btn btn-primary btn-md">
+                <Plus size={16} /> {t.dashboard.createCourse}
+              </Link>
+            ) : null
+          }
+        />
       ) : (
         <div className="card-grid">
-          {filtered.map((c) => (
-            <CourseCard
-              key={c.id}
-              course={c}
-              to={
-                user.role === 'teacher' && c.teacher_id === user.id
-                  ? `/courses/${c.id}/manage`
-                  : `/courses/${c.id}`
-              }
-              showEnrollmentBadge={user.role === 'student'}
-              enrolled={enrolledIds.has(c.id)}
-            />
-          ))}
+          {filtered.map((c) =>
+            user.role === 'teacher' ? (
+              <TeacherCourseCard key={c.id} course={c} />
+            ) : (
+              <CourseCard
+                key={c.id}
+                course={c}
+                to={`/courses/${c.id}`}
+                showEnrollmentBadge={user.role === 'student'}
+                enrolled={enrolledIds.has(c.id)}
+              />
+            ),
+          )}
         </div>
       )}
     </>
+  );
+}
+
+// Teacher variant: not a clickable card — has two explicit action buttons
+// at the bottom (Gérer + Voir) and per-course stat line.
+function TeacherCourseCard({ course }) {
+  const cover = course.cover_image_url
+    ? { backgroundImage: `url(${course.cover_image_url})` }
+    : undefined;
+  return (
+    <div className="course-card" style={{ cursor: 'default' }}>
+      <div className="course-card-cover" style={cover} aria-hidden />
+      <div className="course-card-body">
+        <div className="course-card-title">{course.title}</div>
+        <div className="course-card-teacher text-sm muted">
+          {course.enrollment_count} étudiant{course.enrollment_count > 1 ? 's' : ''} ·{' '}
+          {course.material_count} matériel{course.material_count > 1 ? 's' : ''} ·{' '}
+          {course.quiz_count} quiz
+        </div>
+        <div
+          style={{
+            marginTop: 'auto',
+            paddingTop: 'var(--space-3)',
+            display: 'flex',
+            gap: 'var(--space-2)',
+          }}
+        >
+          <Link to={`/courses/${course.id}/manage`} className="btn btn-primary btn-sm" style={{ flex: 1 }}>
+            Gérer
+          </Link>
+          <Link to={`/courses/${course.id}`} className="btn btn-ghost btn-sm">
+            Voir
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }

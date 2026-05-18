@@ -20,6 +20,7 @@ import ChatPage from './pages/ChatPage';
 import VarkPage from './pages/VarkPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminPanelPage from './pages/AdminPanelPage';
+import TeacherStudentsPage from './pages/TeacherStudentsPage';
 
 import { useAuth } from './context/AuthContext';
 
@@ -104,6 +105,14 @@ export default function App() {
             element={
               <RoleGuard roles={['student']}>
                 <ProfilePage />
+              </RoleGuard>
+            }
+          />
+          <Route
+            path="/students"
+            element={
+              <RoleGuard roles={['teacher']}>
+                <TeacherStudentsPage />
               </RoleGuard>
             }
           />

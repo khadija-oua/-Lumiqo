@@ -3,7 +3,6 @@ const coursesService = require('../services/courses.service');
 const profilingAgent = require('../agents/profilingAgent');
 const { HttpError } = require('../utils/http-error');
 
-const MAX_QUESTIONS_PER_ATTEMPT = 10;
 const DIFFICULTY_LEVELS = ['easy', 'medium', 'hard'];
 
 // Fire-and-forget(-ish) learning-path refresh after a completed attempt.
@@ -115,8 +114,12 @@ async function answer(req, res, next) {
     const refreshed = await quizzesService.findAttemptById(attemptId);
     const servedSoFar = refreshed.total_questions;
 
-    // Cap: at most MAX_QUESTIONS_PER_ATTEMPT served per attempt.
-    if (servedSoFar >= MAX_QUESTIONS_PER_ATTEMPT) {
+    // Cap = the actual number of questions in this quiz. A 5-question
+    // quiz completes after 5 answers; a 20-question quiz runs all 20.
+    const totalQuestionsInQuiz = await quizzesService.countQuestionsForQuiz(
+      attempt.quiz_id,
+    );
+    if (servedSoFar >= totalQuestionsInQuiz) {
       const completed = await quizzesService.completeAttempt(attemptId);
       await refreshLearningPathSafely(req.user.id, attempt.quiz_id);
       return res.json({

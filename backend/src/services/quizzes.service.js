@@ -317,6 +317,26 @@ async function getAttemptBreakdown(attemptId) {
   return rows.map((r) => ({ ...r, is_correct: !!r.is_correct }));
 }
 
+// Single-quiz question count — used by the attempts controller to decide
+// when an attempt is complete (replaces the old hardcoded MAX of 10).
+async function countQuestionsForQuiz(quizId) {
+  const [rows] = await pool.query(
+    'SELECT COUNT(*) AS n FROM questions WHERE quiz_id = ?',
+    [quizId],
+  );
+  return Number(rows[0]?.n || 0);
+}
+
+// Batched variant for the course quiz list — one row per quiz_id.
+async function countQuestionsForQuizzes(quizIds) {
+  if (!quizIds || quizIds.length === 0) return new Map();
+  const [rows] = await pool.query(
+    'SELECT quiz_id, COUNT(*) AS n FROM questions WHERE quiz_id IN (?) GROUP BY quiz_id',
+    [quizIds],
+  );
+  return new Map(rows.map((r) => [r.quiz_id, Number(r.n)]));
+}
+
 // Mode + attempt-limit administration. Training resets max_attempts to NULL
 // and show_answers to TRUE; evaluation requires a 1..10 cap (validated in the
 // controller) and forces show_answers FALSE.
@@ -428,4 +448,6 @@ module.exports = {
   countAttemptsForStudent,
   listAttemptsForQuiz,
   listStudentAttemptStatsForQuizzes,
+  countQuestionsForQuiz,
+  countQuestionsForQuizzes,
 };

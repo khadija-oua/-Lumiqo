@@ -171,6 +171,11 @@ export default function CourseDetailPage() {
                           )}
                           <Badge>{difficultyLabel(q.difficulty)}</Badge>
                           {q.generated_by_ai ? <Badge variant="info">IA</Badge> : null}
+                          {q.totalQuestions != null && (
+                            <span className="text-xs muted">
+                              {q.totalQuestions} question{q.totalQuestions > 1 ? 's' : ''}
+                            </span>
+                          )}
                           {user.role === 'student' && (
                             <span className="text-xs muted">
                               {isEval

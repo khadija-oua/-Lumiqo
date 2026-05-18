@@ -6,7 +6,8 @@ const accessService = require('../services/access.service');
 const quizAgent = require('../agents/quizAgent');
 const { HttpError } = require('../utils/http-error');
 
-const MAX_TOTAL_QUESTIONS = 20;
+const MIN_TOTAL_QUESTIONS = 3;
+const MAX_TOTAL_QUESTIONS = 30;
 const MAX_EVAL_ATTEMPTS = 10;
 
 // Ownership / role guard reused by mode-change + attempt-listing endpoints.
@@ -57,11 +58,11 @@ async function generateFromMaterial(req, res, next) {
     const numMedium = req.body.numMedium ?? 4;
     const numHard = req.body.numHard ?? 2;
     const total = numEasy + numMedium + numHard;
-    if (total < 1 || total > MAX_TOTAL_QUESTIONS) {
+    if (total < MIN_TOTAL_QUESTIONS || total > MAX_TOTAL_QUESTIONS) {
       throw new HttpError(
         400,
         'INVALID_QUESTION_COUNT',
-        `Le nombre total de questions doit être compris entre 1 et ${MAX_TOTAL_QUESTIONS}.`,
+        `Le nombre total de questions doit être compris entre ${MIN_TOTAL_QUESTIONS} et ${MAX_TOTAL_QUESTIONS}.`,
       );
     }
 
@@ -97,6 +98,10 @@ async function detail(req, res, next) {
 
     let payload = req.user.role === 'student' ? sanitizeQuizForStudent(quiz) : quiz;
 
+    // findQuizWithDetails already attached the questions array; reuse its
+    // length so the response surfaces totalQuestions to every role.
+    payload = { ...payload, totalQuestions: (quiz.questions || []).length };
+
     // Annotate per-student attempt state on the quiz object so the
     // QuizTakePage can decide between launch / confirm / locked.
     if (req.user.role === 'student') {
@@ -119,6 +124,14 @@ async function listForCourse(req, res, next) {
     const courseId = Number(req.params.courseId);
     await accessService.ensureCourseReadAccess(req.user, courseId);
     const quizzes = await quizzesService.listForCourse(courseId);
+
+    // Attach totalQuestions to every row (one batched COUNT(*) ... IN (?)).
+    if (quizzes.length > 0) {
+      const counts = await quizzesService.countQuestionsForQuizzes(
+        quizzes.map((q) => q.id),
+      );
+      for (const q of quizzes) q.totalQuestions = counts.get(q.id) || 0;
+    }
 
     // Annotate per-student stats (attempt count, last score, canAttempt) on
     // every quiz so the course detail page can render mode-aware buttons

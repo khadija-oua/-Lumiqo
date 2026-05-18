@@ -12,7 +12,6 @@ import ErrorState from '../components/ErrorState';
 import { apiMessage } from '../api/client';
 import t from '../i18n/fr';
 
-const MAX_QUESTIONS = 10;
 const DIFFICULTY_LABEL = {
   easy: t.quiz.difficultyEasy,
   medium: t.quiz.difficultyMedium,
@@ -233,10 +232,12 @@ export default function QuizTakePage() {
       )}
 
       <div className="quiz-progress-row">
-        <span className="muted text-sm">{t.quiz.progress(served, MAX_QUESTIONS)}</span>
+        <span className="muted text-sm">
+          {t.quiz.progress(served, quiz.totalQuestions || served)}
+        </span>
         <Badge variant="brand">{DIFFICULTY_LABEL[question.difficulty] || question.difficulty}</Badge>
       </div>
-      <ProgressBar value={(served / MAX_QUESTIONS) * 100} />
+      <ProgressBar value={(served / Math.max(1, quiz.totalQuestions || 1)) * 100} />
 
       <div className="quiz-question" style={{ marginTop: 'var(--space-6)' }}>
         {question.question_text}

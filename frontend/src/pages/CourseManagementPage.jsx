@@ -265,11 +265,19 @@ function MaterialsTab({ courseId }) {
   );
 }
 
+const QUIZ_MIN_TOTAL = 3;
+const QUIZ_MAX_TOTAL = 30;
+const QUIZ_FIELD_MAX = 20;
+
 function GenerateQuizModal({ material, onClose, onDone }) {
   const [counts, setCounts] = useState({ numEasy: 4, numMedium: 4, numHard: 2 });
   const [loading, setLoading] = useState(false);
   if (!material) return null;
+  const total = (counts.numEasy || 0) + (counts.numMedium || 0) + (counts.numHard || 0);
+  const valid = total >= QUIZ_MIN_TOTAL && total <= QUIZ_MAX_TOTAL;
+
   const submit = async () => {
+    if (!valid) return;
     setLoading(true);
     try {
       await materialsApi.generateQuizFromMaterial(material.id, counts);
@@ -292,7 +300,7 @@ function GenerateQuizModal({ material, onClose, onDone }) {
           <Button variant="ghost" onClick={onClose} disabled={loading}>
             {t.common.cancel}
           </Button>
-          <Button onClick={submit} loading={loading}>
+          <Button onClick={submit} loading={loading} disabled={!valid}>
             {t.common.create}
           </Button>
         </>
@@ -306,7 +314,7 @@ function GenerateQuizModal({ material, onClose, onDone }) {
             type="number"
             label={t.manage.numEasy}
             min={0}
-            max={10}
+            max={QUIZ_FIELD_MAX}
             value={counts.numEasy}
             onChange={(e) => setCounts((c) => ({ ...c, numEasy: Number(e.target.value) }))}
             disabled={loading}
@@ -315,7 +323,7 @@ function GenerateQuizModal({ material, onClose, onDone }) {
             type="number"
             label={t.manage.numMedium}
             min={0}
-            max={10}
+            max={QUIZ_FIELD_MAX}
             value={counts.numMedium}
             onChange={(e) => setCounts((c) => ({ ...c, numMedium: Number(e.target.value) }))}
             disabled={loading}
@@ -324,11 +332,22 @@ function GenerateQuizModal({ material, onClose, onDone }) {
             type="number"
             label={t.manage.numHard}
             min={0}
-            max={10}
+            max={QUIZ_FIELD_MAX}
             value={counts.numHard}
             onChange={(e) => setCounts((c) => ({ ...c, numHard: Number(e.target.value) }))}
             disabled={loading}
           />
+        </div>
+        <div
+          className="hstack-between"
+          style={{ fontSize: 'var(--text-sm)' }}
+        >
+          <span className="muted">Total : {total} question{total > 1 ? 's' : ''}</span>
+          {!valid && (
+            <span style={{ color: 'var(--color-danger)' }}>
+              Le total doit être entre {QUIZ_MIN_TOTAL} et {QUIZ_MAX_TOTAL} questions.
+            </span>
+          )}
         </div>
       </div>
     </Modal>
@@ -415,6 +434,11 @@ function QuizManageRow({ quiz, onSeeResults }) {
             {modeBadge}
             <Badge>{quiz.difficulty}</Badge>
             {quiz.generated_by_ai ? <Badge variant="info">IA</Badge> : null}
+            {quiz.totalQuestions != null && (
+              <span className="text-xs muted">
+                {quiz.totalQuestions} question{quiz.totalQuestions > 1 ? 's' : ''}
+              </span>
+            )}
             <span className="text-xs muted">{formatDateFr(quiz.created_at)}</span>
           </div>
         </div>
